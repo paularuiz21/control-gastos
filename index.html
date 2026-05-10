@@ -10,7 +10,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { background: #F0EDE8; overscroll-behavior: none; }
+    body { background: #1C1A17; overscroll-behavior: none; }
     input[type=number]::-webkit-inner-spin-button,
     input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
     ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -123,10 +123,6 @@ const TARJETAS_DEFAULT = [
   {id:"visa_nacion", label:"VISA Nación",     sub:"···· 6055",  cierre:{default:19}},
 ];
 
-const PRESUPUESTO_DEFAULT = {
-  "2026-03":{alquiler:564220,expensas:215000,impuestos:83500,suscripciones:15000,supermercado:500000,salidas:300000,alcohol:100000,regalos:75000,viajes:200000,mascota_comida:50000,mascota_otros:25000,tarjeta:424213,traslados:100000,donaciones:35000,educacion:504000},
-};
-
 const VIAS_OTRAS = [
   {id:"Débito",label:"Débito",icon:"wallet"},
   {id:"Efectivo",label:"Efectivo",icon:"cash"},
@@ -225,47 +221,12 @@ const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val))
 
 
 /* ── DATOS PRECARGADOS DEL EXCEL ──────────────────────────── */
-const GASTOS_EXCEL = [
-  {"id":1700000000000,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"tarjeta","observacion":"","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":424212.75},
-  {"id":1700000000001,"fecha":"2026-04-01","fecha_impacto":"2026-04-01","gasto":"tarjeta","observacion":"","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":256549.96},
-  {"id":1700000000002,"fecha":"2026-05-01","fecha_impacto":"2026-05-01","gasto":"tarjeta","observacion":"","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":183966.74},
-  {"id":1700000000003,"fecha":"2026-06-01","fecha_impacto":"2026-06-01","gasto":"tarjeta","observacion":"","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":116649.91},
-  {"id":1700000000004,"fecha":"2026-07-01","fecha_impacto":"2026-07-01","gasto":"tarjeta","observacion":"","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":66666.58},
-  {"id":1700000000005,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"impuestos","observacion":"Flow","tipo_mov":"Gasto","tipo":"Indispensable","via":"Credito","tarjeta":null,"monto_dividir":59514.02,"monto":29757.01},
-  {"id":1700000000006,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"HBO Max","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":8565.7,"monto":4282.85},
-  {"id":1700000000007,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"Microsoft 365","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":37122.8},
-  {"id":1700000000008,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"traslados","observacion":"Uber/Cabify","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":48300},
-  {"id":1700000000009,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"salidas","observacion":"CineFan","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":19799},
-  {"id":1700000000010,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"donaciones","observacion":"Unicef","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":6080},
-  {"id":1700000000011,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"Youtube","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":3560.7},
-  {"id":1700000000012,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"Finquality","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":7500},
-  {"id":1700000000013,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"Spotify","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":8303.49,"monto":2767.83},
-  {"id":1700000000014,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"suscripciones","observacion":"Netflix","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":46503.47,"monto":15501.16},
-  {"id":1700000000015,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"viajes","observacion":"Smiles","tipo_mov":"Gasto","tipo":"Discrecional","via":"Credito","tarjeta":null,"monto_dividir":null,"monto":75000},
-  {"id":1700000000016,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"educacion","observacion":"UCEMA","tipo_mov":"Gasto","tipo":"Discrecional","via":"Debito","tarjeta":null,"monto_dividir":null,"monto":529200},
-  {"id":1700000000017,"fecha":"2026-03-01","fecha_impacto":"2026-03-01","gasto":"educacion","observacion":"UCEMA","tipo_mov":"Gasto","tipo":"Discrecional","via":"Debito","tarjeta":null,"monto_dividir":null,"monto":504000},
-  {"id":1700000000018,"fecha":"2026-04-21","fecha_impacto":"2026-04-21","gasto":"mascota_otros","observacion":"Mascotas de la Abadía","tipo_mov":"Gasto","tipo":"Discrecional","via":"Transferencia","tarjeta":null,"monto_dividir":null,"monto":34300}
-];
-const PRESUPUESTO_EXCEL = {"2026-03":{"alquiler":564220,"expensas":215000,"impuestos":83500,"suscripciones":15000,"supermercado":500000,"salidas":300000,"alcohol":100000,"regalos":75000,"viajes":200000,"mascota_comida":50000,"mascota_otros":25000,"tarjeta":424213,"traslados":100000,"donaciones":35000,"educacion":504000},"2026-04":{"alquiler":564220,"expensas":221235},"2026-05":{"alquiler":632572,"expensas":227651},"2026-06":{"alquiler":632572,"expensas":234253},"2026-07":{"alquiler":632572,"expensas":241046},"2026-08":{"alquiler":632572,"expensas":248036}};
 
 /* ═══════════════════════════════════════════════════════════
    APP
 ═══════════════════════════════════════════════════════════ */
 function App() {
-  const [gastos, setGastos] = useState(() => {
-    try {
-      const stored = load("v5_gastos", null);
-      if (stored) {
-        const storedIds = new Set(stored.map(g => g.id));
-        const nuevos = GASTOS_EXCEL.filter(g => !storedIds.has(g.id));
-        const merged = nuevos.length > 0 ? [...stored, ...nuevos] : stored;
-        if (nuevos.length > 0) save("v5_gastos", merged);
-        return merged;
-      }
-      save("v5_gastos", GASTOS_EXCEL);
-      return GASTOS_EXCEL;
-    } catch { return GASTOS_EXCEL; }
-  });
+  const [gastos, setGastos] = useState(() => load("v6_gastos", []));
   const [cats, setCats] = useState(() => {
     const stored = load("v8_cats", null);
     if (!stored) return CATS_DEFAULT;
@@ -290,12 +251,7 @@ function App() {
     }));
   });
   const [presupComp, setPresupComp] = useState(() => load("v5_presup_comp", {}));
-  const [presup, setPresup] = useState(() => {
-    const stored = load("v5_presup", null);
-    if (stored) return stored;
-    save("v5_presup", PRESUPUESTO_EXCEL);
-    return PRESUPUESTO_EXCEL;
-  });
+  const [presup, setPresup] = useState(() => load("v6_presup", {}));
 
   const [tab,       setTab]       = useState("cargar");
   const [filtroMes, setFiltroMes] = useState(new Date().getMonth());
@@ -316,10 +272,10 @@ function App() {
   };
   const [form, setForm] = useState(FORM_INIT);
 
-  useEffect(() => { save("v5_gastos",   gastos);   }, [gastos]);
+  useEffect(() => { save("v6_gastos",   gastos);   }, [gastos]);
   useEffect(() => { save("v8_cats",     cats);     }, [cats]);
   useEffect(() => { save("v5_tarjetas", tarjetas); }, [tarjetas]);
-  useEffect(() => { save("v5_presup",   presup);   }, [presup]);
+  useEffect(() => { save("v6_presup",   presup);   }, [presup]);
   useEffect(() => { save("v5_presup_comp", presupComp); }, [presupComp]);
   useEffect(() => { save("v5_obj_ahorro",  objAhorro);  }, [objAhorro]);
 
@@ -958,12 +914,13 @@ function App() {
      RENDER
   ══════════════════════════════════════════════════════════ */
   return (
-    <div style={{fontFamily:sansR,background:C.bg,minHeight:"100vh"}}>
+    <div style={{fontFamily:sansR,background:C.dark,minHeight:"100vh",display:"flex",justifyContent:"center"}}>
+      <div style={{width:"100%",maxWidth:480,background:C.bg,minHeight:"100vh",position:"relative"}}>
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap');`}</style>
 
       {/* ── DARK HEADER ── */}
       <div style={{background:C.dark,padding:"28px 20px 0"}}>
-        <div style={{maxWidth:460,margin:"0 auto"}}>
+        <div style={{maxWidth:"100%",margin:"0 auto"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
             <div>
               <div style={{fontFamily:sans,fontSize:10,letterSpacing:"0.22em",textTransform:"uppercase",color:C.faint,marginBottom:5}}>
@@ -1025,7 +982,7 @@ function App() {
       </div>
 
       {/* ── CONTENT ── */}
-      <div style={{maxWidth:460,margin:"0 auto",padding:"20px 16px 40px"}}>
+      <div style={{maxWidth:"100%",margin:"0 auto",padding:"20px 16px 40px"}}>
 
         {/* ════ REGISTRAR */}
         {tab==="cargar" && (
@@ -1823,6 +1780,7 @@ function App() {
       {modal==="objAhorro"   && <ModalObjAhorro/>}
       {modal==="tarjetas" && <ModalTarjetas/>}
       {modal==="presup"   && <ModalPresup/>}
+      </div>
     </div>
   );
 }
