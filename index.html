@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Control de Gastos 2026</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <!-- Firebase SDK v10 compat -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1C1A17; overscroll-behavior: none; }
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: #E4E0DA; border-radius: 2px; }
+    select { -webkit-appearance: none; appearance: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <!-- ═══════════════════════════════════════════════════════
+       FIREBASE CONFIG
+       1. Ir a https://console.firebase.google.com
+       2. Crear proyecto → Agregar app web → copiar config aquí
+       3. En Firebase Console: habilitar Authentication
+          (Google + Email/Password) y Firestore Database
+       ═══════════════════════════════════════════════════════ -->
+  <script>
+    const FIREBASE_CONFIG = {
+      apiKey:            "AIzaSyApFc8ccpoSyksI1SAkRqVgSorNdzn2hFY",
+      authDomain:        "proyecto-gastos-1c077.firebaseapp.com",
+      projectId:         "proyecto-gastos-1c077",
+      storageBucket:     "proyecto-gastos-1c077.firebasestorage.app",
+      messagingSenderId: "807706091341",
+      appId:             "1:807706091341:web:962f21630236c3fcea2104"
+    };
+    const FB_CONFIGURED = FIREBASE_CONFIG.apiKey !== "REEMPLAZAR";
+    if (FB_CONFIGURED) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    const fbAuth = FB_CONFIGURED ? firebase.auth()      : null;
+    const fbDb   = FB_CONFIGURED ? firebase.firestore() : null;
+  </script>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+/* ── FIREBASE HELPERS ─────────────────────────────────────── */
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+const fsLoad = async (uid) => {
+  if (!fbDb) return null;
+  try {
+    const snap = await fbDb.collection("users").doc(uid).get();
+    return snap.exists ? snap.data() : null;
+  } catch(e) { console.warn("fsLoad error:", e); return null; }
+};
+
+const fsSave = debounce(async (uid, data) => {
+  if (!fbDb) return;
+  try { await fbDb.collection("users").doc(uid).set(data); }
+  catch(e) { console.warn("fsSave error:", e); }
+}, 1500);
+
+/* ── SVG ICONS ────────────────────────────────────────────── */
+const Ic = ({ d, size=16, color="currentColor", sw=1.7 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
+    strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"
+    style={{display:"inline-block",flexShrink:0}}>
+    {Array.isArray(d)?d.map((p,i)=><path key={i} d={p}/>):<path d={d}/>}
+  </svg>
+);
+const ICONS = {
+  home:      "M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1z M9 21V12h6v9",
+  building:  ["M3 21h18","M5 21V7l7-4 7 4v14","M9 21v-6h6v6"],
+  receipt:   ["M4 2h16v20l-3-2-3 2-3-2-3 2-3-2V2","M9 7h6","M9 11h6","M9 15h4"],
+  tv:        ["M2 7a2 2 0 012-2h16a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2z","M8 21h8","M12 17v4"],
+  cart:      ["M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z","M3 6h18","M16 10a4 4 0 01-8 0"],
+  music:     ["M9 18V5l12-2v13","M6 21a3 3 0 100-6 3 3 0 000 6zM18 19a3 3 0 100-6 3 3 0 000 6z"],
+  wine:      ["M8 22h8","M12 11v11","M5 3h14l-1.7 8.5a5 5 0 01-4.9 4h-.8a5 5 0 01-4.9-4L5 3z"],
+  gift:      ["M20 12v10H4V12","M2 7h20v5H2z","M12 22V7","M12 7H7.5a2.5 2.5 0 010-5C11 2 12 7 12 7z","M12 7h4.5a2.5 2.5 0 000-5C13 2 12 7 12 7z"],
+  plane:     "M21 16v-2l-8-5V3.5a1.5 1.5 0 00-3 0V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z",
+  paw:       ["M11 4a2 2 0 114 0 2 2 0 01-4 0","M5 8a2 2 0 114 0 2 2 0 01-4 0","M15 8a2 2 0 114 0 2 2 0 01-4 0","M12 20c-3.5 0-6-2-6-5 0-1.5.5-3 2-4l4-2 4 2c1.5 1 2 2.5 2 4 0 3-2.5 5-6 5z"],
+  shirt:     "M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.57a1 1 0 00.99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.57a2 2 0 00-1.34-2.23z",
+  card:      ["M1 4h22v16H1z","M1 10h22"],
+  clock:     ["M12 22a10 10 0 100-20 10 10 0 000 20z","M12 6v6l4 2"],
+  heart:     "M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z",
+  grad:      ["M22 10v6","M2 10l10-5 10 5-10 5z","M6 12v5c0 1.66 2.69 3 6 3s6-1.34 6-3v-5"],
+  wallet:    ["M20 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z","M16 3H8L4 7h16l-4-4z","M16 14a1 1 0 100-2 1 1 0 000 2z"],
+  cash:      ["M12 1v22","M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"],
+  transfer:  ["M7 16V4m0 0L3 8m4-4l4 4","M17 8v12m0 0l4-4m-4 4l-4-4"],
+  plus:      ["M12 5v14","M5 12h14"],
+  list:      ["M9 6h11","M9 12h11","M9 18h11","M4 6h.01","M4 12h.01","M4 18h.01"],
+  barchart:  ["M18 20V10","M12 20V4","M6 20v-6"],
+  settings:  ["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
+  download:  ["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
+  x:         ["M18 6L6 18","M6 6l12 12"],
+  check:     "M20 6L9 17l-5-5",
+  edit:      ["M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7","M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"],
+  trash:     ["M3 6h18","M8 6V4h8v2","M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"],
+  scissors:  ["M6 3a3 3 0 110 6 3 3 0 010-6z","M6 15a3 3 0 110 6 3 3 0 010-6z","M20 4L8.12 15.88","M14.47 14.48L20 20","M8.12 8.12L12 12"],
+  alert:     ["M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z","M12 9v4","M12 17h.01"],
+  trending_up:   ["M23 6l-9.5 9.5-5-5L1 18","M17 6h6v6"],
+  trending_down: ["M23 18l-9.5-9.5-5 5L1 6","M17 18h6v-6"],
+  salary:    ["M12 2a10 10 0 100 20A10 10 0 0012 2z","M12 6v6l4 2","M8 14h.01"],
+  star:      "M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z",
+  delivery:  ["M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h11a2 2 0 012 2v3","M9 17h6","M13 17h3a2 2 0 002-2v-3","M16 5h2l3 5v4h-5V5z","M5.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3z","M18.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"],
+  utensils:  ["M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2","M7 2v20","M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"],
+  zap:       ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+};
+const Icon = ({name,size=16,color="currentColor",sw=1.7}) => {
+  const d=ICONS[name]; if(!d) return null;
+  return <Ic d={d} size={size} color={color} sw={sw}/>;
+};
+
+/* ── DEFAULT DATA ──────────────────────────────────────────── */
+const CATS_DEFAULT = [
+  {id:"bienes_muebles", label:"Bienes muebles",         tipo:"Discrecional",  icon:"home"},
+  {id:"alcohol",        label:"Alcohol",                tipo:"Discrecional",  icon:"wine"},
+  {id:"alquiler",       label:"Alquiler",               tipo:"Indispensable", icon:"home"},
+  {id:"comidas",        label:"Comidas afuera",         tipo:"Discrecional",  icon:"utensils"},
+  {id:"delivery",       label:"Delivery",               tipo:"Discrecional",  icon:"delivery"},
+  {id:"donaciones",     label:"Donaciones",             tipo:"Discrecional",  icon:"heart"},
+  {id:"educacion",      label:"Educación",              tipo:"Discrecional",  icon:"grad"},
+  {id:"expensas",       label:"Expensas",               tipo:"Indispensable", icon:"building"},
+  {id:"extraordinarios",label:"Gastos extraordinarios", tipo:"Discrecional",  icon:"zap"},
+  {id:"impuestos",      label:"Impuestos",              tipo:"Indispensable", icon:"receipt"},
+  {id:"mascota_comida", label:"Mascota comida",         tipo:"Indispensable", icon:"paw"},
+  {id:"mascota_otros",  label:"Mascota otros",          tipo:"Discrecional",  icon:"paw"},
+  {id:"regalos",        label:"Regalos",                tipo:"Discrecional",  icon:"gift"},
+  {id:"ropa",           label:"Ropa",                   tipo:"Discrecional",  icon:"shirt"},
+  {id:"salidas",        label:"Salidas",                tipo:"Discrecional",  icon:"music"},
+  {id:"supermercado",   label:"Supermercado",           tipo:"Indispensable", icon:"cart"},
+  {id:"suscripciones",  label:"Suscripciones",          tipo:"Discrecional",  icon:"tv"},
+  {id:"tarjeta",        label:"Tarjeta pendiente",      tipo:"Discrecional",  icon:"card"},
+  {id:"traslados",      label:"Traslados",              tipo:"Discrecional",  icon:"clock"},
+  {id:"estetica",       label:"Estética / Belleza",     tipo:"Discrecional",  icon:"star"},
+  {id:"salud",          label:"Salud",                  tipo:"Indispensable", icon:"heart"},
+  {id:"servicios",       label:"Servicios",              tipo:"Indispensable", icon:"wallet"},
+  {id:"viajes",         label:"Viajes",                 tipo:"Discrecional",  icon:"plane"},
+];
+
+const CATS_INGRESO = [
+  {id:"sueldo",      label:"Sueldo",               icon:"salary"},
+  {id:"dev_imp",     label:"Devolución impuestos",  icon:"receipt"},
+  {id:"bono",        label:"Bono",                  icon:"star"},
+  {id:"aguinaldo",   label:"Aguinaldo",             icon:"gift"},
+  {id:"otro_ingreso",label:"Otros ingresos",        icon:"cash"},
+];
+
+const CATS_AHORRO = [
+  {id:"usd_cuenta",  label:"USD en cuenta",         icon:"transfer"},
+  {id:"inversiones", label:"Inversiones varias",    icon:"barchart"},
+  {id:"otro_ahorro", label:"Otros ahorros",         icon:"star"},
+];
+
+const TARJETAS_DEFAULT = [
+  {id:"visa_sant",   label:"VISA Santander",  sub:"···· 7449",  cierre:{default:19}},
+  {id:"amex_sant",   label:"AMEX Santander",  sub:"···· 17814", cierre:{default:19}},
+  {id:"mc_nacion",   label:"MC Nación",       sub:"···· 1054",  cierre:{default:19}},
+  {id:"visa_nacion", label:"VISA Nación",     sub:"···· 6055",  cierre:{default:19}},
+];
+
+const VIAS_OTRAS = [
+  {id:"Débito",label:"Débito",icon:"wallet"},
+  {id:"Efectivo",label:"Efectivo",icon:"cash"},
+  {id:"Transferencia",label:"Transf.",icon:"transfer"},
+];
+
+const MESES = ["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"];
+
+/* ── V1 → V2 CATEGORY MIGRATION MAP ─────────────────────── */
+const V1_TO_V2 = {
+  "Alquiler":                  "alquiler",
+  "Expensas":                  "expensas",
+  "Gastos impuestos":          "impuestos",
+  "Impuestos":                 "impuestos",
+  "Streaming":                 "suscripciones",
+  "Supermercado":              "supermercado",
+  "Salidas":                   "salidas",
+  "Alcohol":                   "alcohol",
+  "Regalos":                   "regalos",
+  "Viajes":                    "viajes",
+  "Francis comida":            "mascota_comida",
+  "Francis otros":             "mascota_otros",
+  "Ropa":                      "ropa",
+  "Pendiente tarjeta credito": "tarjeta",
+  "Traslados":                 "traslados",
+  "Donaciones":                "donaciones",
+  "Educación":                 "educacion",
+  "Educacion":                 "educacion",
+  "Donaciones":                "donaciones",
+};
+
+const migrateGasto = (g) => ({
+  ...g,
+  gasto: V1_TO_V2[g.gasto] || g.gasto,
+  tipo: g.tipo || "Discrecional",
+});
+
+const ICON_OPTIONS = ["home","building","receipt","cart","delivery","utensils","tv","music","wine","gift","plane","paw","shirt","card","clock","heart","grad","wallet","cash","transfer","star","zap","barchart","salary"];
+
+/* ── HELPERS ──────────────────────────────────────────────── */
+const today = () => new Date().toISOString().split("T")[0];
+
+const getCierre = (t, fecha) => {
+  try {
+    if (!t || t.cierre === null || t.cierre === undefined) return 19;
+    if (typeof t.cierre === "number") return t.cierre;
+    if (typeof t.cierre === "object") {
+      const mk = (fecha||"").substring(0,7);
+      return t.cierre[mk] || t.cierre.default || 19;
+    }
+    return 19;
+  } catch(e) { return 19; }
+};
+
+const fechaImpacto = (fecha, tid, tarjetas) => {
+  if (!tid) return fecha;
+  const t = tarjetas.find(t=>t.id===tid);
+  if (!t) return fecha;
+  const d = new Date(fecha+"T12:00:00");
+  const x = d.getDate()<=t.cierre ? 1 : 2;
+  return new Date(d.getFullYear(), d.getMonth()+x, 1).toISOString().split("T")[0];
+};
+
+const impactoInfo = (fecha, tid, tarjetas) => {
+  if (!tid) return null;
+  const t = tarjetas.find(t=>t.id===tid);
+  if (!t) return null;
+  const d = new Date(fecha+"T12:00:00");
+  const cierre = getCierre(t, fecha);
+  const x = d.getDate() <= cierre ? 1 : 2;
+  return {mes:MESES[(d.getMonth()+x)%12], cerro:x===2, cierre};
+};
+
+const fmt = (n) =>
+  new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+const fmtUSD = (n) =>
+  new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n);
+
+const mesKey = (mes) => `2026-${String(mes+1).padStart(2,"0")}`;
+
+/* ── TOKENS ───────────────────────────────────────────────── */
+const C = {
+  dark:"#1C1A17", bg:"#F0EDE8", paper:"#FFFFFF",
+  rule:"#E4E0DA", ink:"#1C1A17", mid:"#A09890", faint:"#6B6460",
+  accent:"#E8450A", red:"#C0392B", green:"#1A6B3A",
+  amber:"#9A5200", blue:"#1B4F9A", tagI:"#FEF0E8", tagD:"#EEF3FF",
+  dark2:"#2A2724",
+};
+const sans  = "'Barlow Condensed',sans-serif";
+const sansR = "'Barlow',sans-serif";
+const serif = "Georgia,'Times New Roman',serif";
+
+/* ── STORAGE HELPERS ──────────────────────────────────────── */
+const load = (key, def) => { try { const v=localStorage.getItem(key); return v?JSON.parse(v):def; } catch { return def; } };
+const save = (key, val) => { try { localStorage.setItem(key,JSON.stringify(val)); } catch {} };
+
+
+/* ── DATOS PRECARGADOS DEL EXCEL ──────────────────────────── */
+
+/* ═══════════════════════════════════════════════════════════
+   LOGIN SCREEN
+═══════════════════════════════════════════════════════════ */
+function LoginScreen({ onGuest }) {
+  const [mode,    setMode]    = useState("menu");
+  const [email,   setEmail]   = useState("");
+  const [pass,    setPass]    = useState("");
+  const [err,     setErr]     = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const btnBase = {
+    width:"100%", padding:"13px 16px", borderRadius:10, border:"none",
+    cursor:"pointer", fontFamily:sans, fontWeight:700, fontSize:14,
+    display:"flex", alignItems:"center", justifyContent:"center",
+    gap:8, marginBottom:10, transition:"opacity .15s"
+  };
+  const inputStyle = {
+    width:"100%", padding:"12px 14px", borderRadius:10, marginBottom:10,
+    border:`1px solid ${C.rule}`, background:C.paper, fontFamily:sansR,
+    fontSize:14, color:C.ink, outline:"none"
+  };
+
+  const withLoading = async (fn) => {
+    setLoading(true); setErr("");
+    try { await fn(); }
+    catch(e) { setErr(e.message || "Error al ingresar"); setLoading(false); }
+  };
+
+  const loginGoogle = () => withLoading(async () => {
+    const p = new firebase.auth.GoogleAuthProvider();
+    await fbAuth.signInWithPopup(p);
+  });
+
+  const loginEmail = () => withLoading(async () => {
+    if (!email || !pass) throw new Error("Completá email y contraseña");
+    try {
+      await fbAuth.signInWithEmailAndPassword(email, pass);
+    } catch(e) {
+      if (e.code === "auth/user-not-found" || e.code === "auth/invalid-credential" || e.code === "auth/invalid-email") {
+        await fbAuth.createUserWithEmailAndPassword(email, pass);
+      } else throw e;
+    }
+  });
+
+  return (
+    <div style={{minHeight:"100vh", background:C.dark, display:"flex", alignItems:"center", justifyContent:"center", padding:24}}>
+      <div style={{width:"100%", maxWidth:360}}>
+
+        {/* Header */}
+        <div style={{textAlign:"center", marginBottom:36}}>
+          <div style={{fontFamily:sans, fontSize:10, letterSpacing:"0.22em", textTransform:"uppercase", color:C.faint, marginBottom:6}}>
+            Seguimiento · 2026
+          </div>
+          <div style={{fontFamily:serif, fontSize:36, fontWeight:900, color:"#F4F0EB", letterSpacing:"-0.01em", lineHeight:1}}>
+            Control de Gastos
+          </div>
+          <div style={{fontFamily:sansR, fontSize:13, color:C.mid, marginTop:10}}>
+            Iniciá sesión para sincronizar entre dispositivos
+          </div>
+        </div>
+
+        {mode === "menu" && (
+          <>
+            <button onClick={loginGoogle} disabled={loading}
+              style={{...btnBase, background:C.accent, color:"#fff", opacity: loading ? .6 : 1}}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05"/>
+                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+              </svg>
+              Continuar con Google
+            </button>
+
+            <button onClick={() => setMode("email")} disabled={loading}
+              style={{...btnBase, background:C.paper, color:C.ink, border:`1px solid ${C.rule}`}}>
+              <Icon name="receipt" size={16} color={C.ink}/>
+              Continuar con Email
+            </button>
+
+            <div style={{textAlign:"center", margin:"8px 0 16px", color:C.faint, fontSize:12, letterSpacing:"0.1em"}}>
+              ── o ──
+            </div>
+
+            <button onClick={onGuest}
+              style={{...btnBase, background:"transparent", color:C.mid, border:`1px solid ${C.rule}`, fontSize:12}}>
+              <Icon name="download" size={14} color={C.mid}/>
+              Solo en este dispositivo (sin sincronización)
+            </button>
+
+            {err && <div style={{color:C.red, fontSize:12, textAlign:"center", marginTop:8}}>{err}</div>}
+          </>
+        )}
+
+        {mode === "email" && (
+          <>
+            <div style={{fontFamily:sans, fontSize:13, color:C.mid, marginBottom:14}}>
+              Si no tenés cuenta, se crea automáticamente al ingresar.
+            </div>
+            <input value={email} onChange={e=>setEmail(e.target.value)}
+              placeholder="Email" type="email" style={inputStyle}/>
+            <input value={pass} onChange={e=>setPass(e.target.value)}
+              placeholder="Contraseña" type="password" style={inputStyle}
+              onKeyDown={e => e.key==="Enter" && loginEmail()}/>
+            {err && <div style={{color:C.red, fontSize:12, marginBottom:10}}>{err}</div>}
+
+            <button onClick={loginEmail} disabled={loading}
+              style={{...btnBase, background:C.accent, color:"#fff", opacity: loading ? .6 : 1}}>
+              {loading ? "Ingresando…" : "Ingresar / Crear cuenta"}
+            </button>
+            <button onClick={() => { setMode("menu"); setErr(""); }}
+              style={{...btnBase, background:"transparent", color:C.mid, border:`1px solid ${C.rule}`}}>
+              Volver
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════
+   APP
+═══════════════════════════════════════════════════════════ */
+function App() {
+  /* ── AUTH + SYNC STATE ── */
+  // Si Firebase no está configurado, ir directo a modo invitado
+  const [authUser,   setAuthUser]   = useState(FB_CONFIGURED ? null : false);
+  const [isGuest,    setIsGuest]    = useState(!FB_CONFIGURED || localStorage.getItem("v3_guest") === "1");
+  const [syncReady,  setSyncReady]  = useState(!FB_CONFIGURED);
+
+  const [gastos, setGastos] = useState(() => load("v6_gastos", []));
+  const [cats, setCats] = useState(() => {
+    const stored = load("v8_cats", null);
+    // Always start from CATS_DEFAULT as base, then apply user customizations on top
+    const base = CATS_DEFAULT;
+    if (!stored) return base;
+    // Keep user label/tipo/icon edits for existing cats, add new defaults, dedupe
+    const seen = new Set();
+    const merged = [...stored, ...base].filter(c => {
+      if (seen.has(c.id)) return false;
+      seen.add(c.id);
+      return true;
+    });
+    return merged.sort((a,b)=>a.label.localeCompare(b.label,"es"));
+  });
+  const [tarjetas, setTarjetas] = useState(() => {
+    const stored = load("v5_tarjetas", null);
+    const base = stored || TARJETAS_DEFAULT;
+    // Migrate: ensure cierre is always an object
+    return base.map(t => ({
+      ...t,
+      cierre: (typeof t.cierre === "object" && t.cierre !== null)
+        ? t.cierre
+        : {default: typeof t.cierre === "number" ? t.cierre : 19}
+    }));
+  });
+  const [presupComp, setPresupComp] = useState(() => load("v5_presup_comp", {}));
+  const [presup, setPresup] = useState(() => load("v6_presup", {}));
+
+  const [tab,       setTab]       = useState("cargar");
+  const [filtroMes, setFiltroMes] = useState(new Date().getMonth());
+  const [filtroCat, setFiltroCat] = useState("Todas");
+  const [saved,     setSaved]     = useState(false);
+  const [editando,  setEditando]  = useState(null); // gasto id being edited
+  const [modal,     setModal]     = useState(null); // "cats" | "tarjetas" | "presup" | "editGasto"
+  const [reporteImg, setReporteImg] = useState(null);
+  const [vistaResumen, setVistaResumen] = useState("personal"); // "personal" | "compartido"
+  const [vistaRep,     setVistaRep]     = useState("personal"); // reporte anual toggle
+  const [objAhorro,    setObjAhorro]    = useState(() => load("v5_obj_ahorro", {}));
+
+  const FORM_INIT = {
+    fecha:today(), gasto:cats[0]?.id||"", observacion:"",
+    tipo_mov:"Gasto", via:"Débito", tarjeta:"",
+    monto_dividir:"", monto:"", dividir:false,
+    moneda:"ARS", tcambio:"",
+  };
+  const [form, setForm] = useState(FORM_INIT);
+
+  useEffect(() => { save("v6_gastos",   gastos);   }, [gastos]);
+  useEffect(() => { save("v8_cats",     cats);     }, [cats]);
+  useEffect(() => { save("v5_tarjetas", tarjetas); }, [tarjetas]);
+  useEffect(() => { save("v6_presup",   presup);   }, [presup]);
+  useEffect(() => { save("v5_presup_comp", presupComp); }, [presupComp]);
+  useEffect(() => { save("v5_obj_ahorro",  objAhorro);  }, [objAhorro]);
+
+  /* ── FIREBASE: escuchar cambios de sesión ── */
+  useEffect(() => {
+    if (!FB_CONFIGURED) return;
+    const unsub = fbAuth.onAuthStateChanged(u => setAuthUser(u || false));
+    return unsub;
+  }, []);
+
+  /* ── FIREBASE: cargar datos de Firestore al iniciar sesión ── */
+  useEffect(() => {
+    if (!FB_CONFIGURED || isGuest) { setSyncReady(true); return; }
+    if (!authUser) return;
+    setSyncReady(false);
+    fsLoad(authUser.uid).then(data => {
+      if (data) {
+        if (Array.isArray(data.gastos))               setGastos(data.gastos);
+        if (Array.isArray(data.cats) && data.cats.length > 0) setCats(data.cats);
+        if (Array.isArray(data.tarjetas))             setTarjetas(data.tarjetas);
+        if (data.presup    && typeof data.presup    === "object") setPresup(data.presup);
+        if (data.presupComp && typeof data.presupComp === "object") setPresupComp(data.presupComp);
+        if (data.objAhorro  && typeof data.objAhorro  === "object") setObjAhorro(data.objAhorro);
+      }
+      setSyncReady(true);
+    });
+  }, [authUser, isGuest]);
+
+  /* ── FIREBASE: guardar en Firestore cuando cambia cualquier estado ── */
+  useEffect(() => {
+    if (!authUser || isGuest || !syncReady) return;
+    fsSave(authUser.uid, { gastos, cats, tarjetas, presup, presupComp, objAhorro });
+  }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, syncReady]);
+
+  const set = (k) => (e) => setForm({...form,[k]:e.target.value});
+
+  // Always render cats in alphabetical order regardless of storage order
+  const catsSorted = [...cats].sort((a,b) => a.label.localeCompare(b.label, "es"));
+
+  const montoFinal = (f=form) => {
+    if (f.dividir && f.monto_dividir) return parseFloat(f.monto_dividir)/2;
+    return parseFloat(f.monto)||0;
+  };
+
+  const guardar = () => {
+    if (!form.monto && !form.monto_dividir) return;
+    const cat = cats.find(c=>c.id===form.gasto);
+    const imp = fechaImpacto(form.fecha, form.tarjeta||null, tarjetas);
+    const via = form.tarjeta
+      ? (tarjetas.find(t=>t.id===form.tarjeta)?.label||"Crédito")
+      : form.via;
+    const montoBase = montoFinal();
+    const montoARS = form.moneda==="USD" && form.tcambio
+      ? montoBase * parseFloat(form.tcambio)
+      : montoBase;
+    const nuevo = {
+      id: editando||Date.now(),
+      fecha:form.fecha, fecha_impacto:imp,
+      gasto:form.gasto, observacion:form.observacion,
+      tipo_mov:form.tipo_mov, tipo:cat?.tipo||"",
+      via, tarjeta:form.tarjeta||null,
+      monto_dividir:form.monto_dividir?parseFloat(form.monto_dividir):null,
+      monto:montoARS,
+      moneda:form.moneda,
+      monto_original:form.moneda==="USD"?montoBase:null,
+      tcambio:form.moneda==="USD"&&form.tcambio?parseFloat(form.tcambio):null,
+    };
+    if (editando) {
+      setGastos(gs=>gs.map(g=>g.id===editando?nuevo:g));
+      setEditando(null); setModal(null);
+    } else {
+      setGastos(gs=>[nuevo,...gs]);
+    }
+    setForm(FORM_INIT);
+    setSaved(true); setTimeout(()=>setSaved(false),1600);
+  };
+
+  const editarGasto = (g) => {
+    setEditando(g.id);
+    const tarjetaId = tarjetas.find(t=>t.label===g.via)?.id||"";
+    setForm({
+      fecha:g.fecha, gasto:g.gasto, observacion:g.observacion||"",
+      tipo_mov:g.tipo_mov, via:tarjetaId?g.via:g.via, tarjeta:tarjetaId,
+      monto_dividir:g.monto_dividir?String(g.monto_dividir):"",
+      monto:tarjetaId?"":(g.monto_dividir?"":String(g.monto)),
+      dividir:!!g.monto_dividir,
+    });
+    setTab("cargar"); setModal(null);
+  };
+
+  const eliminarGasto = (id) => setGastos(gs=>gs.filter(g=>g.id!==id));
+
+  /* ── FILTERED DATA ── */
+  const filtrados = gastos.filter(g => {
+    const ref = g.fecha_impacto||g.fecha;
+    const d = new Date(ref+"T12:00:00");
+    return d.getMonth()===filtroMes && (filtroCat==="Todas"||g.gasto===filtroCat);
+  });
+
+  const mk = mesKey(filtroMes);
+  const presupMes = presup[mk]||{};
+
+  const totalG  = filtrados.filter(g=>g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  const totalI  = filtrados.filter(g=>g.tipo_mov==="Ingreso").reduce((s,g)=>s+g.monto,0);
+  const totalA     = filtrados.filter(g=>g.tipo_mov==="Ahorro").reduce((s,g)=>s+g.monto,0);
+  const objAhorroMes = objAhorro[mk] || 0;
+  const totalAAnual    = gastos.filter(g=>g.tipo_mov==="Ahorro").reduce((s,g)=>s+g.monto,0);
+  const totalA_USD     = filtrados.filter(g=>g.tipo_mov==="Ahorro"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
+  const totalAAnual_USD= gastos.filter(g=>g.tipo_mov==="Ahorro"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
+  const objAhorroAnual = Object.values(objAhorro).reduce((s,v)=>s+v,0);
+  const totalI_USD = filtrados.filter(g=>g.tipo_mov==="Ingreso"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
+  const remanente = totalI - totalG - totalA;
+  const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
+
+  // Gastos compartidos (monto total del hogar = monto_dividir)
+  const gastosComp = filtrados.filter(g => g.tipo_mov==="Gasto" && g.monto_dividir);
+  const totalComp  = gastosComp.reduce((s,g) => s + g.monto_dividir, 0);
+  const presupCompMes = presupComp[mk] || {};
+  const totalPresupComp = Object.values(presupCompMes).reduce((s,v)=>s+v,0);
+
+  const porCat = catsSorted.map(c=>({
+    ...c,
+    total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0),
+    count:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").length,
+  })).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+
+  const exportarCSV = () => {
+    const h="Fecha,Gasto,Observación,Tipo mov,Tipo,Via,Monto dividir,Monto";
+    const r=gastos.map(g=>`${g.fecha},"${cats.find(c=>c.id===g.gasto)?.label||g.gasto}","${g.observacion||""}",${g.tipo_mov},${g.tipo},"${g.via}",${g.monto_dividir||""},${g.monto}`);
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([[h,...r].join("\n")],{type:"text/csv;charset=utf-8;"}));
+    a.download=`gastos_${MESES[filtroMes]}_2026.csv`; a.click();
+  };
+
+  /* ── STYLES ── */
+  const inp = {width:"100%",padding:"10px 13px",borderRadius:8,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:sansR};
+  const lbl = {display:"block",fontFamily:sans,fontWeight:700,fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:C.mid,marginBottom:7};
+  const card = {background:C.paper,borderRadius:12,boxShadow:"0 1px 4px rgba(0,0,0,0.07)",padding:"13px 15px"};
+
+  /* ── MONTH STRIP ── */
+  const MesTabs = () => (
+    <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:6,marginBottom:16}}>
+      {MESES.map((m,i)=>(
+        <button key={i} onClick={()=>setFiltroMes(i)} style={{
+          padding:"5px 10px",borderRadius:6,border:"none",cursor:"pointer",
+          background:filtroMes===i?C.dark:C.paper,
+          color:filtroMes===i?"#fff":C.mid,
+          fontFamily:sans,fontWeight:700,fontSize:11,
+          letterSpacing:"0.06em",whiteSpace:"nowrap",
+          boxShadow:filtroMes===i?"none":"0 1px 3px rgba(0,0,0,0.06)",
+        }}>{m}</button>
+      ))}
+    </div>
+  );
+
+  /* ── FORM PANEL (shared for add/edit) ── */
+  /* ── MODAL: CATEGORÍAS ── */
+  const ModalCats = () => {
+    const [localGasto,   setLocalGasto]   = useState(cats.map(c=>({...c, tipo: c.tipo||'Discrecional'})));
+    const [localIngreso, setLocalIngreso] = useState(CATS_INGRESO);
+    const [localAhorro,  setLocalAhorro]  = useState(CATS_AHORRO);
+    const [seccion, setSeccion] = useState("Gasto");
+    const [nueva, setNueva] = useState({label:"",tipo:"Discrecional",icon:"star"});
+
+    const local    = seccion==="Gasto" ? localGasto    : seccion==="Ingreso" ? localIngreso : localAhorro;
+    const setLocal = seccion==="Gasto" ? setLocalGasto : seccion==="Ingreso" ? setLocalIngreso : setLocalAhorro;
+
+    const seccionColor = seccion==="Ingreso" ? C.green : seccion==="Ahorro" ? C.blue : C.accent;
+
+    return (
+      <Modal title="Categorías" onClose={()=>setModal(null)}>
+        {/* Tabs de sección */}
+        <div style={{display:"flex",gap:4,marginBottom:16}}>
+          {["Gasto","Ingreso","Ahorro"].map(s=>(
+            <button key={s} onClick={()=>setSeccion(s)} style={{
+              flex:1,padding:"8px 4px",borderRadius:8,border:"none",cursor:"pointer",
+              background:seccion===s ? (s==="Ingreso"?C.green:s==="Ahorro"?C.blue:C.accent) : C.paper,
+              color:seccion===s?"#fff":C.mid,
+              fontFamily:sans,fontWeight:700,fontSize:12,
+              boxShadow:seccion===s?"none":"0 1px 3px rgba(0,0,0,0.06)",
+            }}>{s}</button>
+          ))}
+        </div>
+
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {local.map((c,i)=>(
+            <div key={c.id} style={{...card,display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
+              <div style={{width:28,height:28,borderRadius:6,
+                background:seccion==="Gasto"?(c.tipo==="Indispensable"?C.tagI:C.tagD):"#F0EDE8",
+                display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name={c.icon||"star"} size={13}
+                  color={seccion==="Gasto"?(c.tipo==="Indispensable"?C.accent:"#4A7CC7"):seccionColor}/>
+              </div>
+              <div style={{flex:1,minWidth:0}}>
+                <input value={c.label} onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,label:e.target.value}:x))}
+                  style={{...inp,padding:"4px 8px",fontSize:13,marginBottom:seccion==="Gasto"?4:0}}/>
+                {seccion==="Gasto" && (
+                  <div style={{display:"flex",gap:6}}>
+                    {["Indispensable","Discrecional"].map(t=>(
+                      <button key={t} onClick={()=>setLocal(l=>l.map((x,j)=>j===i?{...x,tipo:t}:x))} style={{
+                        padding:"3px 8px",borderRadius:4,border:`1px solid ${c.tipo===t?C.dark:C.rule}`,
+                        background:c.tipo===t?C.dark:C.paper,color:c.tipo===t?"#fff":C.mid,
+                        fontFamily:sans,fontSize:9,fontWeight:700,cursor:"pointer",letterSpacing:"0.06em",
+                      }}>{t.slice(0,5).toUpperCase()}</button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button onClick={()=>setLocal(l=>l.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer"}}>
+                <Icon name="trash" size={14} color={C.mid}/>
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Nueva categoría */}
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>Nueva categoría de {seccion}</label>
+          <input placeholder="Nombre" value={nueva.label} onChange={e=>setNueva({...nueva,label:e.target.value})}
+            style={{...inp,marginBottom:8}}/>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:10}}>
+            {ICON_OPTIONS.map(ic=>(
+              <button key={ic} onClick={()=>setNueva({...nueva,icon:ic})} style={{
+                width:34,height:34,borderRadius:7,border:`1.5px solid ${nueva.icon===ic?C.dark:C.rule}`,
+                background:nueva.icon===ic?C.dark:C.paper,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+                <Icon name={ic} size={14} color={nueva.icon===ic?"#fff":C.mid}/>
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>{
+            if(!nueva.label.trim()) return;
+            setLocal(l=>[...l,{id:Date.now().toString(),label:nueva.label.trim(),tipo:"Discrecional",icon:nueva.icon}]);
+            setNueva({label:"",tipo:"Discrecional",icon:"star"});
+          }} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:seccionColor,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            Agregar categoría de {seccion}
+          </button>
+        </div>
+
+        <button onClick={()=>{
+          setCats([...localGasto].sort((a,b)=>a.label.localeCompare(b.label,"es")));
+          // Note: CATS_INGRESO and CATS_AHORRO are module-level constants — in a future version these could also be stored
+          setModal(null);
+        }} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          Guardar cambios
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: TARJETAS ── */
+  const ModalTarjetas = () => {
+    const [local, setLocal] = useState(tarjetas.map(t=>({
+      ...t,
+      cierre: (typeof t.cierre === "object" && t.cierre !== null) ? t.cierre : {default: t.cierre||19}
+    })));
+    const [nueva, setNueva] = useState({label:"",sub:"",cierre:{default:19}});
+    const [expandido, setExpandido] = useState(null);
+
+    const getCierreVal = (t, mk) => t.cierre[mk] || t.cierre.default || 19;
+    const setCierreVal = (i, mk, val) => setLocal(l=>l.map((x,j)=>j===i?{...x,cierre:{...x.cierre,[mk]:parseInt(val)||0}}:x));
+    const setDefault = (i, val) => setLocal(l=>l.map((x,j)=>j===i?{...x,cierre:{...x.cierre,default:parseInt(val)||19}}:x));
+
+    return (
+      <Modal title="Tarjetas de crédito" onClose={()=>setModal(null)}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {local.map((t,i)=>(
+            <div key={t.id} style={{...card,padding:"10px 12px"}}>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                <div>
+                  <label style={lbl}>Nombre</label>
+                  <input value={t.label} onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,label:e.target.value}:x))} style={{...inp,padding:"6px 10px",fontSize:13}}/>
+                </div>
+                <div>
+                  <label style={lbl}>Dígitos</label>
+                  <input value={t.sub} onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,sub:e.target.value}:x))} style={{...inp,padding:"6px 10px",fontSize:13}} placeholder="···· 1234"/>
+                </div>
+              </div>
+              {/* Cierre default */}
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}>
+                <div style={{flex:1}}>
+                  <label style={lbl}>Día de cierre (default)</label>
+                  <input type="number" min="1" max="31" value={t.cierre.default||19}
+                    onChange={e=>setDefault(i,e.target.value)}
+                    style={{...inp,padding:"6px 10px",fontSize:13}}/>
+                </div>
+                <button onClick={()=>setExpandido(expandido===i?null:i)} style={{background:"none",border:`1px solid ${C.rule}`,borderRadius:6,padding:"6px 10px",cursor:"pointer",marginTop:16,fontFamily:sans,fontSize:11,color:C.mid,fontWeight:700}}>
+                  {expandido===i?"▲ Ocultar":"▼ Por mes"}
+                </button>
+                <button onClick={()=>setLocal(l=>l.filter((_,j)=>j!==i))} style={{background:"none",border:"none",cursor:"pointer",marginTop:16}}>
+                  <Icon name="trash" size={15} color={C.mid}/>
+                </button>
+              </div>
+              {/* Cierre por mes */}
+              {expandido===i && (
+                <div style={{background:C.bg,borderRadius:8,padding:"10px",marginTop:4}}>
+                  <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.1em",color:C.mid,textTransform:"uppercase",marginBottom:8}}>Día de cierre por mes (dejá vacío para usar el default)</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                    {MESES.map((m,mi)=>{
+                      const mk2 = `2026-${String(mi+1).padStart(2,"0")}`;
+                      return (
+                        <div key={mk2}>
+                          <label style={{...lbl,marginBottom:3}}>{m}</label>
+                          <input type="number" min="1" max="31"
+                            value={t.cierre[mk2]||""}
+                            placeholder={String(t.cierre.default||19)}
+                            onChange={e=>setCierreVal(i,mk2,e.target.value)}
+                            style={{...inp,padding:"5px 8px",fontSize:12}}/>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+        {/* Nueva tarjeta */}
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>Nueva tarjeta</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <input placeholder="Nombre" value={nueva.label} onChange={e=>setNueva({...nueva,label:e.target.value})} style={{...inp,padding:"8px 10px",fontSize:13}}/>
+            <input placeholder="···· 1234" value={nueva.sub} onChange={e=>setNueva({...nueva,sub:e.target.value})} style={{...inp,padding:"8px 10px",fontSize:13}}/>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+            <label style={{...lbl,margin:0,whiteSpace:"nowrap"}}>Día cierre default:</label>
+            <input type="number" min="1" max="31" value={nueva.cierre.default}
+              onChange={e=>setNueva({...nueva,cierre:{...nueva.cierre,default:parseInt(e.target.value)||19}})}
+              style={{...inp,width:80,padding:"6px 10px",fontSize:13}}/>
+          </div>
+          <button onClick={()=>{
+            if(!nueva.label.trim()) return;
+            setLocal(l=>[...l,{id:Date.now().toString(),label:nueva.label.trim(),sub:nueva.sub,cierre:nueva.cierre}]);
+            setNueva({label:"",sub:"",cierre:{default:19}});
+          }} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:C.accent,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            Agregar tarjeta
+          </button>
+        </div>
+        <button onClick={()=>{setTarjetas(local);setModal(null);}} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          Guardar cambios
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: OBJETIVO DE AHORRO ── */
+  const ModalObjAhorro = () => {
+    const [local, setLocal] = useState(objAhorro);
+    const [mesSel, setMesSel] = useState(filtroMes);
+    const mk2 = mesKey(mesSel);
+
+    return (
+      <Modal title="Objetivo de Ahorro" onClose={()=>setModal(null)}>
+        <div style={{background:"#EEF3FF", border:"1px solid #BDD0EE", borderRadius:8, padding:"10px 12px", marginBottom:14}}>
+          <p style={{fontFamily:sans, fontSize:12, color:C.blue, fontWeight:600}}>
+            Definí cuánto querés ahorrar cada mes. Se compara con los movimientos de tipo Ahorro que registres.
+          </p>
+        </div>
+        <div style={{display:"flex", gap:4, overflowX:"auto", paddingBottom:8, marginBottom:14}}>
+          {MESES.map((m,i)=>(
+            <button key={i} onClick={()=>setMesSel(i)} style={{
+              padding:"5px 10px", borderRadius:6, border:"none", cursor:"pointer",
+              background:mesSel===i?C.blue:C.paper, color:mesSel===i?"#fff":C.mid,
+              fontFamily:sans, fontWeight:700, fontSize:11, whiteSpace:"nowrap",
+            }}>{m}</button>
+          ))}
+        </div>
+        <div style={{...card, marginBottom:14}}>
+          <label style={lbl}>Objetivo de ahorro — {MESES[mesSel]}</label>
+          <input type="number" placeholder="$ 0"
+            value={local[mk2]||""}
+            onChange={e=>setLocal(l=>({...l,[mk2]:parseFloat(e.target.value)||0}))}
+            style={{...inp, fontFamily:serif, fontSize:22, fontWeight:900}}/>
+        </div>
+        <div style={{...card, marginBottom:14}}>
+          <div style={{fontFamily:sans, fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:C.mid, marginBottom:8}}>Todos los meses</div>
+          {MESES.map((m,i)=>{
+            const mk3=mesKey(i);
+            return (
+              <div key={i} style={{display:"flex", alignItems:"center", gap:10, marginBottom:8}}>
+                <span style={{fontFamily:sans, fontWeight:600, fontSize:12, color:C.ink, width:32}}>{m}</span>
+                <input type="number" placeholder="0"
+                  value={local[mk3]||""}
+                  onChange={e=>setLocal(l=>({...l,[mk3]:parseFloat(e.target.value)||0}))}
+                  style={{...inp, padding:"6px 10px", fontSize:13, flex:1}}/>
+              </div>
+            );
+          })}
+        </div>
+        <button onClick={()=>{setObjAhorro(local);setModal(null);}} style={{width:"100%", padding:"13px", borderRadius:10, border:"none", background:C.blue, color:"#fff", fontFamily:sans, fontWeight:700, fontSize:14, cursor:"pointer"}}>
+          Guardar objetivos
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: PRESUPUESTO COMPARTIDO ── */
+  const ModalPresupComp = () => {
+    const [local, setLocal] = useState(presupComp);
+    const [mesSel, setMesSel] = useState(filtroMes);
+    const mk2 = mesKey(mesSel);
+    const vals = local[mk2]||{};
+    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...vals,[catId]:parseFloat(v)||0}}));
+
+    return (
+      <Modal title="Presupuesto compartido" onClose={()=>setModal(null)}>
+        <div style={{background:"#7C3AED15", border:"1px solid #7C3AED30", borderRadius:8, padding:"10px 12px", marginBottom:14}}>
+          <p style={{fontFamily:sans, fontSize:12, color:"#7C3AED", fontWeight:600}}>
+            Este es el presupuesto total del hogar para los gastos que comparten. Se usa solo para comparar en reuniones — no afecta tu presupuesto personal.
+          </p>
+        </div>
+        <div style={{display:"flex", gap:4, overflowX:"auto", paddingBottom:8, marginBottom:14}}>
+          {MESES.map((m,i)=>(
+            <button key={i} onClick={()=>setMesSel(i)} style={{
+              padding:"5px 10px", borderRadius:6, border:"none", cursor:"pointer",
+              background:mesSel===i?"#7C3AED":C.paper, color:mesSel===i?"#fff":C.mid,
+              fontFamily:sans, fontWeight:700, fontSize:11, whiteSpace:"nowrap",
+            }}>{m}</button>
+          ))}
+        </div>
+        <div style={{display:"flex", flexDirection:"column", gap:8, marginBottom:14}}>
+          {cats.filter(c=>c.tipo!=="").map(c=>(
+            <div key={c.id} style={{...card, display:"flex", alignItems:"center", gap:10, padding:"10px 12px"}}>
+              <div style={{width:28, height:28, borderRadius:6, background:c.tipo==="Indispensable"?C.tagI:C.tagD, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0}}>
+                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#4A7CC7"}/>
+              </div>
+              <span style={{flex:1, fontFamily:sans, fontWeight:600, fontSize:13, color:C.ink}}>{c.label}</span>
+              <input type="number" value={vals[c.id]||""} onChange={e=>setVal(c.id,e.target.value)}
+                placeholder="0" style={{...inp, width:120, padding:"6px 10px", fontSize:13, textAlign:"right"}}/>
+            </div>
+          ))}
+        </div>
+        <button onClick={()=>{setPresupComp(local);setModal(null);}} style={{width:"100%", padding:"13px", borderRadius:10, border:"none", background:"#7C3AED", color:"#fff", fontFamily:sans, fontWeight:700, fontSize:14, cursor:"pointer"}}>
+          Guardar presupuesto compartido
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: PRESUPUESTO ── */
+  const ModalPresup = () => {
+    const [local, setLocal] = useState(presup);
+    const [mesSel, setMesSel] = useState(filtroMes);
+    const mk2 = mesKey(mesSel);
+    const vals = local[mk2]||{};
+
+    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...vals,[catId]:parseFloat(v)||0}}));
+
+    return (
+      <Modal title="Presupuesto" onClose={()=>setModal(null)}>
+        {/* Selector de mes */}
+        <div style={{display:"flex",gap:4,overflowX:"auto",paddingBottom:8,marginBottom:14}}>
+          {MESES.map((m,i)=>(
+            <button key={i} onClick={()=>setMesSel(i)} style={{
+              padding:"5px 10px",borderRadius:6,border:"none",cursor:"pointer",
+              background:mesSel===i?C.dark:C.paper,color:mesSel===i?"#fff":C.mid,
+              fontFamily:sans,fontWeight:700,fontSize:11,whiteSpace:"nowrap",
+              boxShadow:mesSel===i?"none":"0 1px 3px rgba(0,0,0,0.06)",
+            }}>{m}</button>
+          ))}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {catsSorted.filter(c=>c.tipo!=="").map(c=>(
+            <div key={c.id} style={{...card,display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
+              <div style={{width:28,height:28,borderRadius:6,background:c.tipo==="Indispensable"?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#4A7CC7"}/>
+              </div>
+              <span style={{flex:1,fontFamily:sans,fontWeight:600,fontSize:13,color:C.ink}}>{c.label}</span>
+              <input type="number" value={vals[c.id]||""} onChange={e=>setVal(c.id,e.target.value)}
+                placeholder="0" style={{...inp,width:120,padding:"6px 10px",fontSize:13,textAlign:"right"}}/>
+            </div>
+          ))}
+        </div>
+        <button onClick={()=>{setPresup(local);setModal(null);}} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          Guardar presupuesto
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── GENERAR REPORTE ── */
+  const generarReporte = () => {
+    const scale = 2;
+    const W = 460 * scale;
+    const PAD = 18 * scale;
+    const DARK="#1C1A17", BG="#F0EDE8", PAPER="#FFFFFF";
+    const ACCENT="#E8450A", RED="#C0392B", GREEN="#1A6B3A";
+    const MID="#A09890", RULE="#E4E0DA", BLUE="#1B4F9A";
+    const fmtN = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+
+    const mk2 = mesKey(filtroMes);
+    const presupMesRep = presup[mk2] || {};
+
+    // Per category: mes y anual
+    const gastoMesCat = {}, gastoAnualCat = {}, presupAnualCat = {};
+    cats.forEach(c => {
+      gastoMesCat[c.id]    = gastos.filter(g => {
+        const ref = g.fecha_impacto||g.fecha;
+        return g.gasto===c.id && g.tipo_mov==="Gasto" && new Date(ref+"T12:00:00").getMonth()===filtroMes;
+      }).reduce((s,g)=>s+g.monto,0);
+      gastoAnualCat[c.id]  = gastos.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+      presupAnualCat[c.id] = Object.values(presup).reduce((s,m)=>s+(m[c.id]||0),0);
+    });
+
+    const totalGMes     = Object.values(gastoMesCat).reduce((s,v)=>s+v,0);
+    const totalPresupMes= Object.values(presupMesRep).reduce((s,v)=>s+v,0);
+    const totalGAnual   = Object.values(gastoAnualCat).reduce((s,v)=>s+v,0);
+    const totalPAnual   = Object.values(presupAnualCat).reduce((s,v)=>s+v,0);
+    const rafAnual      = totalPAnual - totalGAnual;
+
+    const catsWithData = cats.filter(c=>presupAnualCat[c.id]>0||gastoAnualCat[c.id]>0||gastoMesCat[c.id]>0);
+    const rowH = 62*scale;
+    const headerH = 220*scale;
+    const secH = 28*scale;
+    const footerH = 50*scale;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = headerH + secH + catsWithData.length*rowH + secH + footerH + 20*scale;
+    const ctx = canvas.getContext("2d");
+
+    // BG
+    ctx.fillStyle = BG;
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+
+    // DARK HEADER
+    ctx.fillStyle = DARK;
+    ctx.fillRect(0,0,W,headerH);
+
+    // Title
+    ctx.fillStyle = "#F4F0EB";
+    ctx.font = `900 ${20*scale}px Georgia,serif`;
+    ctx.fillText("Control de Gastos", PAD, 38*scale);
+    ctx.fillStyle = "#6B6460";
+    ctx.font = `${9*scale}px 'Barlow Condensed',sans-serif`;
+    ctx.fillText(`SEGUIMIENTO 2026 · ${MESES[filtroMes].toUpperCase()}`, PAD, 54*scale);
+
+    // ── MES boxes
+    ctx.fillStyle = "#A09890";
+    ctx.font = `700 ${8*scale}px 'Barlow Condensed',sans-serif`;
+    ctx.fillText(`MES · ${MESES[filtroMes].toUpperCase()}`, PAD, 72*scale);
+
+    const mesBoxes = [
+      {label:"GASTADO", value:fmtN(totalGMes), col:RED},
+      {label:"PRESUPUESTO", value:fmtN(totalPresupMes), col:BLUE},
+      {label:"DESVÍO", value:fmtN(totalGMes-totalPresupMes), col:totalGMes<=totalPresupMes?GREEN:RED},
+    ];
+    const bw=(W-PAD*2-16*scale)/3;
+    mesBoxes.forEach((b,i)=>{
+      const bx=PAD+i*(bw+8*scale), by=80*scale;
+      ctx.fillStyle=PAPER; ctx.beginPath(); ctx.roundRect(bx,by,bw,56*scale,7*scale); ctx.fill();
+      ctx.fillStyle=b.col; ctx.fillRect(bx,by,3*scale,56*scale);
+      ctx.fillStyle=MID; ctx.font=`700 ${7.5*scale}px 'Barlow Condensed',sans-serif`;
+      ctx.fillText(b.label,bx+9*scale,by+16*scale);
+      ctx.fillStyle=b.col; ctx.font=`900 ${12*scale}px Georgia,serif`;
+      ctx.fillText(b.value,bx+9*scale,by+38*scale);
+    });
+
+    // ── ANUAL boxes
+    ctx.fillStyle = "#A09890";
+    ctx.font = `700 ${8*scale}px 'Barlow Condensed',sans-serif`;
+    ctx.fillText("ACUMULADO ANUAL", PAD, 152*scale);
+
+    const anualBoxes = [
+      {label:"GASTADO AÑO", value:fmtN(totalGAnual), col:RED},
+      {label:"PRESUP. AÑO", value:fmtN(totalPAnual), col:BLUE},
+      {label:"RAF RESTANTE", value:fmtN(rafAnual), col:rafAnual>=0?GREEN:RED},
+    ];
+    anualBoxes.forEach((b,i)=>{
+      const bx=PAD+i*(bw+8*scale), by=160*scale;
+      ctx.fillStyle=PAPER; ctx.beginPath(); ctx.roundRect(bx,by,bw,50*scale,7*scale); ctx.fill();
+      ctx.fillStyle=b.col; ctx.fillRect(bx,by,3*scale,50*scale);
+      ctx.fillStyle=MID; ctx.font=`700 ${7.5*scale}px 'Barlow Condensed',sans-serif`;
+      ctx.fillText(b.label,bx+9*scale,by+14*scale);
+      ctx.fillStyle=b.col; ctx.font=`900 ${11*scale}px Georgia,serif`;
+      ctx.fillText(b.value,bx+9*scale,by+34*scale);
+    });
+
+    // ── SECTION: DESGLOSE POR CATEGORÍA
+    let y = headerH;
+    ctx.fillStyle="#2A2724"; ctx.fillRect(0,y,W,secH);
+    ctx.fillStyle=MID; ctx.font=`700 ${8.5*scale}px 'Barlow Condensed',sans-serif`;
+    ctx.fillText("CATEGORÍA", PAD, y+18*scale);
+    ctx.textAlign="right";
+    ctx.fillText("MES", W-PAD-160*scale, y+18*scale);
+    ctx.fillText("ANUAL", W-PAD-76*scale, y+18*scale);
+    ctx.fillText("RAF", W-PAD, y+18*scale);
+    ctx.textAlign="left";
+    y += secH;
+
+    catsWithData.forEach((c,i)=>{
+      const gMes  = gastoMesCat[c.id]||0;
+      const gAnu  = gastoAnualCat[c.id]||0;
+      const pAnu  = presupAnualCat[c.id]||0;
+      const pMes  = presupMesRep[c.id]||0;
+      const raf2  = pAnu - gAnu;
+      const over  = raf2<0;
+      const isI   = c.tipo==="Indispensable";
+      const ry    = y + i*rowH;
+
+      if(i%2===0){ctx.fillStyle=PAPER;}else{ctx.fillStyle="#F8F5F1";}
+      ctx.fillRect(0,ry,W,rowH);
+
+      // accent
+      ctx.fillStyle=isI?ACCENT:BLUE;
+      ctx.fillRect(0,ry,3*scale,rowH);
+
+      // name
+      ctx.fillStyle=DARK; ctx.font=`700 ${11*scale}px 'Barlow Condensed',sans-serif`;
+      ctx.fillText(c.label,PAD,ry+16*scale);
+
+      // tipo
+      ctx.fillStyle=isI?ACCENT:BLUE; ctx.font=`600 ${7*scale}px 'Barlow Condensed',sans-serif`;
+      ctx.fillText(isI?"INDISPENSABLE":"DISCRECIONAL",PAD,ry+28*scale);
+
+      // progress bar anual
+      if(pAnu>0){
+        const bW2=140*scale, bX2=W-PAD-bW2-168*scale, bY2=ry+34*scale;
+        ctx.fillStyle=RULE; ctx.beginPath(); ctx.roundRect(bX2,bY2,bW2,4*scale,2*scale); ctx.fill();
+        ctx.fillStyle=over?RED:GREEN; ctx.beginPath();
+        ctx.roundRect(bX2,bY2,bW2*Math.min(gAnu/pAnu,1),4*scale,2*scale); ctx.fill();
+      }
+
+      // numbers
+      ctx.textAlign="right";
+      ctx.font=`900 ${10.5*scale}px Georgia,serif`;
+      ctx.fillStyle=gMes>0?(pMes>0&&gMes>pMes?RED:DARK):MID;
+      ctx.fillText(gMes>0?fmtN(gMes):"—",W-PAD-160*scale,ry+20*scale);
+      ctx.fillStyle=gAnu>0?RED:MID;
+      ctx.fillText(gAnu>0?fmtN(gAnu):"—",W-PAD-76*scale,ry+20*scale);
+      ctx.fillStyle=pAnu>0?(over?RED:GREEN):MID;
+      ctx.fillText(pAnu>0?fmtN(raf2):"—",W-PAD,ry+20*scale);
+      ctx.textAlign="left";
+
+      // separator
+      ctx.fillStyle=RULE; ctx.fillRect(PAD,ry+rowH-1,W-PAD*2,1);
+    });
+
+    // FOOTER
+    const fy2 = y + catsWithData.length*rowH;
+    ctx.fillStyle=DARK; ctx.fillRect(0,fy2,W,footerH+20*scale);
+    ctx.fillStyle="#6B6460"; ctx.font=`${8.5*scale}px 'Barlow Condensed',sans-serif`;
+    ctx.textAlign="center";
+    ctx.fillText(`Control de Gastos · 2026 · ${new Date().toLocaleDateString("es-AR")}`,W/2,fy2+28*scale);
+    ctx.textAlign="left";
+
+    setReporteImg(canvas.toDataURL("image/png"));
+  };
+
+
+  /* ── MODAL OVERLAY ── */
+  const Modal = ({title, onClose, children}) => (
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
+      <div style={{background:C.bg,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:460,maxHeight:"85vh",overflow:"auto",padding:"20px 16px 32px"}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+          <span style={{fontFamily:serif,fontSize:20,fontWeight:900,color:C.ink}}>{title}</span>
+          <button onClick={onClose} style={{background:"none",border:"none",cursor:"pointer"}}><Icon name="x" size={18} color={C.mid}/></button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════
+     RENDER
+  ══════════════════════════════════════════════════════════ */
+  /* ── AUTH GATE ── */
+  const goGuest  = () => { localStorage.setItem("v3_guest","1"); setIsGuest(true); };
+  const doLogout = () => {
+    localStorage.removeItem("v3_guest");
+    setIsGuest(false); setSyncReady(false);
+    fbAuth.signOut();
+  };
+
+  if (!isGuest && authUser === null) {
+    return (
+      <div style={{minHeight:"100vh",background:C.dark,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{fontFamily:sans,color:C.faint,fontSize:13,letterSpacing:"0.1em"}}>Verificando sesión…</div>
+      </div>
+    );
+  }
+  if (!isGuest && authUser === false) {
+    return <LoginScreen onGuest={goGuest}/>;
+  }
+  if (authUser && !isGuest && !syncReady) {
+    return (
+      <div style={{minHeight:"100vh",background:C.dark,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{fontFamily:sans,color:C.faint,fontSize:13,letterSpacing:"0.1em"}}>Sincronizando datos…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{fontFamily:sansR,background:C.dark,minHeight:"100vh",display:"flex",justifyContent:"center"}}>
+      <div style={{width:"100%",maxWidth:480,background:C.bg,minHeight:"100vh",position:"relative"}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap');`}</style>
+
+      {/* ── DARK HEADER ── */}
+      <div style={{background:C.dark,padding:"28px 20px 0"}}>
+        <div style={{maxWidth:"100%",margin:"0 auto"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+            <div>
+              <div style={{fontFamily:sans,fontSize:10,letterSpacing:"0.22em",textTransform:"uppercase",color:C.faint,marginBottom:5}}>
+                Seguimiento · 2026
+              </div>
+              <div style={{fontFamily:serif,fontSize:36,fontWeight:900,color:"#F4F0EB",letterSpacing:"-0.01em",lineHeight:1}}>
+                Control de Gastos
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
+              <div style={{background:C.accent,borderRadius:7,padding:"5px 12px"}}>
+                <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:"#fff",letterSpacing:"0.01em"}}>
+                  {MESES[new Date().getMonth()]}
+                </span>
+              </div>
+              {/* Settings button */}
+              <button onClick={()=>setModal("settings")} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:7,padding:"6px 10px",cursor:"pointer",display:"flex",gap:5,alignItems:"center"}}>
+                <Icon name="settings" size={13} color="#fff"/>
+                <span style={{fontFamily:sans,fontSize:10,color:"#fff",fontWeight:600,letterSpacing:"0.06em"}}>Config</span>
+              </button>
+            </div>
+          </div>
+
+          {totalG > 0 && (
+            <div style={{marginBottom:18}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                <span style={{fontFamily:sans,fontSize:10,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Indispensable</span>
+                <span style={{fontFamily:sans,fontSize:10,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Discrecional</span>
+              </div>
+              <div style={{height:4,background:C.dark2,borderRadius:2,overflow:"hidden",display:"flex"}}>
+                <div style={{width:`${(indispT/totalG)*100}%`,background:C.accent,transition:"width .5s"}}/>
+                <div style={{flex:1,background:"#4A7CC7"}}/>
+              </div>
+              <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
+                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.accent}}>{Math.round((indispT/totalG)*100)}%</span>
+                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#4A7CC7"}}>{Math.round((discrT/totalG)*100)}%</span>
+              </div>
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div style={{display:"flex"}}>
+            {[["cargar","plus","Registrar"],["lista","list","Movimientos"],["resumen","barchart","Resumen"]].map(([id,icon,label])=>{
+              const active=tab===id;
+              return (
+                <button key={id} onClick={()=>setTab(id)} style={{
+                  flex:1,padding:"11px 6px",border:"none",
+                  background:active?C.bg:"transparent",borderRadius:active?"8px 8px 0 0":0,
+                  color:active?C.ink:C.faint,fontFamily:sans,fontWeight:700,fontSize:11,
+                  letterSpacing:"0.07em",textTransform:"uppercase",cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:6,transition:"all .15s",
+                }}>
+                  <Icon name={icon} size={13} color={active?C.ink:C.faint}/>{label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* ── CONTENT ── */}
+      <div style={{maxWidth:"100%",margin:"0 auto",padding:"20px 16px 40px"}}>
+
+        {/* ════ REGISTRAR */}
+        {tab==="cargar" && (
+    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+      {editando && (
+        <div style={{background:C.tagI,border:`1px solid #F5C0A0`,borderRadius:8,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+          <Icon name="edit" size={13} color={C.accent}/>
+          <span style={{fontFamily:sans,fontSize:12,color:C.accent,fontWeight:700}}>Editando movimiento</span>
+          <button onClick={()=>{setEditando(null);setForm(FORM_INIT);}} style={{marginLeft:"auto",background:"none",border:"none",cursor:"pointer",color:C.accent}}>
+            <Icon name="x" size={13} color={C.accent}/>
+          </button>
+        </div>
+      )}
+
+      {/* Fecha + Tipo */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+        <div>
+          <label style={lbl}>Fecha</label>
+          <input type="date" value={form.fecha} onChange={set("fecha")} style={inp}/>
+        </div>
+        <div>
+          <label style={lbl}>Tipo</label>
+          <div style={{display:"flex",gap:6}}>
+            {[
+              {id:"Gasto",   icon:"trending_down", col:C.red},
+              {id:"Ingreso", icon:"trending_up",   col:C.green},
+              {id:"Ahorro",  icon:"star",           col:"#1B4F9A"},
+            ].map(({id,icon,col})=>{
+              const active=form.tipo_mov===id;
+              return (
+                <button key={id} onClick={()=>setForm({...form,tipo_mov:id})} style={{
+                  flex:1,padding:"9px 4px",borderRadius:8,border:`1.5px solid ${active?col:C.rule}`,
+                  background:active?col:C.paper,color:active?"#fff":C.mid,
+                  fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer",
+                  display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                }}>
+                  <Icon name={icon} size={12} color={active?"#fff":C.mid}/>
+                  {id}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Categoría */}
+      <div>
+        <label style={lbl}>Categoría</label>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {(form.tipo_mov==="Ingreso"?CATS_INGRESO:form.tipo_mov==="Ahorro"?CATS_AHORRO:catsSorted).map((c)=>{
+            const {id,label,tipo,icon} = c;
+            const active=form.gasto===id;
+            const isI=tipo==="Indispensable";
+            const iconBg = active?"rgba(255,255,255,0.1)":(form.tipo_mov==="Gasto"?(isI?C.tagI:C.tagD):"#F0EDE8");
+            const iconCol = active?"#fff":(form.tipo_mov==="Ingreso"?C.green:form.tipo_mov==="Ahorro"?C.blue:(isI?C.accent:"#4A7CC7"));
+            return (
+              <button key={id} onClick={()=>setForm({...form,gasto:id})} style={{
+                padding:"9px 11px",borderRadius:9,cursor:"pointer",textAlign:"left",
+                border:`1.5px solid ${active?C.dark:C.rule}`,
+                background:active?C.dark:C.paper,
+                display:"flex",alignItems:"center",gap:9,
+                boxShadow:active?"none":"0 1px 3px rgba(0,0,0,0.05)",transition:"all .14s",
+              }}>
+                <div style={{width:30,height:30,borderRadius:7,flexShrink:0,background:iconBg,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <Icon name={icon||"star"} size={14} color={iconCol}/>
+                </div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:sans,fontWeight:600,fontSize:12,color:active?"#fff":C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{label}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Observación */}
+      <div>
+        <label style={lbl}>Observación</label>
+        <input type="text" placeholder="Carrefour, Netflix, Uber..." value={form.observacion} onChange={set("observacion")} style={inp}/>
+      </div>
+
+      {/* Moneda */}
+      <div>
+        <label style={lbl}>Moneda</label>
+        <div style={{display:"flex",gap:6}}>
+          {[{id:"ARS",label:"$ ARS"},{id:"USD",label:"U$S USD"}].map(({id,label})=>{
+            const active=form.moneda===id;
+            return (
+              <button key={id} onClick={()=>setForm({...form,moneda:id,tcambio:""})} style={{
+                flex:1,padding:"9px 8px",borderRadius:8,border:`1.5px solid ${active?C.dark:C.rule}`,
+                background:active?C.dark:C.paper,color:active?"#fff":C.mid,
+                fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer",
+              }}>{label}</button>
+            );
+          })}
+        </div>
+        {form.moneda==="USD"&&(
+          <div style={{marginTop:8}}>
+            <label style={{...lbl,marginBottom:5}}>Tipo de cambio (1 USD = ? ARS)</label>
+            <input type="number" placeholder="Ej: 1250" value={form.tcambio} onChange={set("tcambio")}
+              style={inp}/>
+            {form.tcambio&&form.monto&&(
+              <div style={{marginTop:6,fontFamily:sans,fontSize:12,color:C.mid}}>
+                Equivale a {fmt(parseFloat(form.monto||0)*parseFloat(form.tcambio||0))} ARS
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Monto */}
+      <div style={{...card}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+          <label style={{...lbl,margin:0}}>Monto</label>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:sans,fontSize:11,color:C.mid,fontWeight:600}}>
+            <input type="checkbox" checked={form.dividir} onChange={e=>setForm({...form,dividir:e.target.checked,monto:"",monto_dividir:""})} style={{accentColor:C.dark}}/>
+            <Icon name="scissors" size={11} color={C.mid}/> Dividir en 2
+          </label>
+        </div>
+        {form.dividir ? (
+          <div>
+            <input type="number" placeholder="Monto total" value={form.monto_dividir} onChange={set("monto_dividir")} style={inp}/>
+            {form.monto_dividir && (
+              <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
+                Tu parte: {fmt(parseFloat(form.monto_dividir)/2)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <input type="number" placeholder="$ 0" value={form.monto} onChange={set("monto")}
+            style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}} placeholder={form.moneda==="USD"?"U$S 0":"$ 0"}
+            onKeyDown={e=>e.key==="Enter"&&guardar()}/>
+        )}
+      </div>
+
+      {/* Vía de pago */}
+      <div>
+        <label style={lbl}>Vía de pago</label>
+        <div style={{display:"flex",gap:6,marginBottom:8}}>
+          {VIAS_OTRAS.map(({id,label,icon})=>{
+            const active=form.via===id&&!form.tarjeta;
+            return (
+              <button key={id} onClick={()=>setForm({...form,via:id,tarjeta:""})} style={{
+                flex:1,padding:"9px 6px",borderRadius:8,border:`1.5px solid ${active?C.dark:C.rule}`,
+                background:active?C.dark:C.paper,color:active?"#fff":C.mid,
+                fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                boxShadow:active?"none":"0 1px 3px rgba(0,0,0,0.05)",
+              }}>
+                <Icon name={icon} size={12} color={active?"#fff":C.mid}/>{label}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {tarjetas.map(t=>{
+            const active=form.tarjeta===t.id;
+            return (
+              <button key={t.id} onClick={()=>setForm({...form,via:"Crédito",tarjeta:t.id})} style={{
+                padding:"9px 11px",borderRadius:9,cursor:"pointer",
+                border:`1.5px solid ${active?C.dark:C.rule}`,background:active?C.dark:C.paper,
+                display:"flex",alignItems:"center",gap:8,
+                boxShadow:active?"none":"0 1px 3px rgba(0,0,0,0.05)",transition:"all .14s",
+              }}>
+                <Icon name="card" size={14} color={active?"#fff":"#4A7CC7"}/>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontFamily:sans,fontWeight:700,fontSize:11,color:active?"#fff":C.ink}}>{t.label}</div>
+                  <div style={{fontFamily:sans,fontSize:9,color:active?"rgba(255,255,255,0.5)":C.mid,letterSpacing:"0.06em"}}>{t.sub}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        {form.tarjeta && (()=>{
+          const info=impactoInfo(form.fecha,form.tarjeta,tarjetas);
+          if(!info) return null;
+          return (
+            <div style={{marginTop:10,padding:"9px 13px",borderRadius:8,background:info.cerro?"#FEF0E8":"#EEF4FF",border:`1px solid ${info.cerro?"#F5C0A0":"#BDD0EE"}`,display:"flex",alignItems:"center",gap:8}}>
+              <Icon name={info.cerro?"alert":"card"} size={13} color={info.cerro?C.amber:C.blue}/>
+              <span style={{fontFamily:sans,fontSize:12,fontWeight:600,color:info.cerro?C.amber:C.blue}}>
+                {info.cerro?`Cerró el ${info.cierre} — impacta en ${info.mes}`:`Impacta en ${info.mes}`}
+              </span>
+            </div>
+          );
+        })()}
+      </div>
+
+      <button onClick={guardar} style={{
+        padding:"14px",borderRadius:10,border:"none",
+        background:saved?C.green:C.accent,color:"#fff",
+        fontFamily:sans,fontWeight:700,fontSize:14,
+        letterSpacing:"0.08em",textTransform:"uppercase",cursor:"pointer",
+        display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+        boxShadow:`0 4px 16px ${saved?C.green+"44":C.accent+"44"}`,transition:"background .3s",
+      }}>
+        <Icon name={saved?"check":"plus"} size={15} color="#fff" sw={2.5}/>
+        {saved?(editando?"Cambios guardados":"Guardado"):(editando?"Guardar cambios":"Guardar movimiento")}
+      </button>
+        </div>
+        )}
+
+        {/* ════ MOVIMIENTOS */}
+        {tab==="lista" && (
+          <div>
+            <MesTabs/>
+            <select value={filtroCat} onChange={e=>setFiltroCat(e.target.value)}
+              style={{...inp,marginBottom:14,cursor:"pointer",fontFamily:sans,fontWeight:600}}>
+              <option value="Todas">Todas las categorías</option>
+              {catsSorted.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}
+            </select>
+
+            {filtrados.length>0 && (
+              <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div style={{...card,borderLeft:`3px solid ${C.red}`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      <Icon name="trending_down" size={12} color={C.red}/>
+                      <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Gastos</span>
+                    </div>
+                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.red}}>{fmt(totalG)}</div>
+                  </div>
+                  <div style={{...card,borderLeft:`3px solid ${C.green}`}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
+                      <Icon name="trending_up" size={12} color={C.green}/>
+                      <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Ingresos</span>
+                    </div>
+                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>{fmt(totalI)}</div>
+                  </div>
+                </div>
+                {totalA>0 && (
+                  <div style={{...card,borderLeft:`3px solid ${C.blue}`}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <Icon name="star" size={12} color={C.blue}/>
+                        <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Ahorro / Inversión</span>
+                      </div>
+                      <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.blue}}>{fmt(totalA)}</div>
+                      {totalA_USD>0 && <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.blue}}>{fmtUSD(totalA_USD)}</div>}
+                    </div>
+                    {objAhorroMes>0 && (
+                      <div style={{marginTop:6}}>
+                        <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
+                          <div style={{width:`${Math.min((totalA/objAhorroMes)*100,100)}%`,height:"100%",background:totalA>=objAhorroMes?C.green:C.blue,transition:"width .5s"}}/>
+                        </div>
+                        <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginTop:3}}>
+                          {((totalA/objAhorroMes)*100).toFixed(0)}% del objetivo mensual · {fmt(objAhorroMes)}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {filtrados.length===0 ? (
+              <div style={{textAlign:"center",color:C.mid,padding:"52px 0",fontFamily:serif,fontSize:20,fontWeight:900}}>
+                Sin movimientos en {MESES[filtroMes]}
+              </div>
+            ) : (
+              <div style={{display:"flex",flexDirection:"column",gap:7,maxHeight:500,overflowY:"auto"}}>
+                {filtrados.map(g=>{
+                  const cat=cats.find(c=>c.id===g.gasto);
+                  const isI=g.tipo==="Indispensable";
+                  const info=g.tarjeta?impactoInfo(g.fecha,g.tarjeta,tarjetas):null;
+                  return (
+                    <div key={g.id} style={{...card,display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:isI?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <Icon name={cat?.icon||"star"} size={16} color={isI?C.accent:"#4A7CC7"}/>
+                      </div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                          <span style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{cat?.label||g.gasto}</span>
+                          {g.observacion&&<span style={{fontFamily:sans,fontSize:12,color:C.mid}}>{g.observacion}</span>}
+                        </div>
+                        <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
+                          <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{g.fecha}</span>
+                          <span style={{color:C.rule}}>·</span>
+                          <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{g.via}</span>
+                          {info&&(
+                            <span style={{fontFamily:sans,fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"2px 6px",borderRadius:4,background:info.cerro?"#FEF0E8":"#EEF4FF",color:info.cerro?C.amber:C.blue}}>
+                              {info.cerro?`! ${info.mes}`:info.mes}
+                            </span>
+                          )}
+                          {g.monto_dividir&&<span style={{fontFamily:sans,fontSize:11,color:C.blue}}>Total: {fmt(g.monto_dividir)}</span>}
+                        </div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontFamily:serif,fontSize:18,fontWeight:900,color:g.tipo_mov==="Ingreso"?C.green:(g.tipo_mov==="Ahorro"?C.blue:C.red)}}>
+                            {g.tipo_mov==="Ingreso"?"+":"−"}{fmt(g.monto)}
+                          </div>
+                          {g.moneda==="USD"&&g.monto_original&&(
+                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>{fmtUSD(g.monto_original)}</div>
+                          )}
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                          <button onClick={()=>editarGasto(g)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
+                            <Icon name="edit" size={13} color={C.mid}/>
+                          </button>
+                          <button onClick={()=>eliminarGasto(g.id)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
+                            <Icon name="trash" size={13} color={C.mid}/>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {gastos.length>0&&(
+              <button onClick={exportarCSV} style={{marginTop:16,width:"100%",padding:"12px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontFamily:sans,fontWeight:700,fontSize:12,letterSpacing:"0.08em",textTransform:"uppercase",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,boxShadow:"0 1px 4px rgba(0,0,0,0.06)"}}>
+                <Icon name="download" size={13} color={C.ink}/>Exportar CSV
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* ════ RESUMEN */}
+        {tab==="resumen" && (()=>{
+          const dif=totalG-totalPresup;
+          const pctExec=totalPresup>0?(totalG/totalPresup)*100:0;
+          return (
+            <div>
+              <MesTabs/>
+
+              {/* Toggle Personal / Compartido */}
+              <div style={{display:"flex", gap:0, background:C.rule, borderRadius:10, padding:3, marginBottom:16}}>
+                {[["personal","Personal"],["compartido","Compartido"]].map(([id,label])=>(
+                  <button key={id} onClick={()=>setVistaResumen(id)} style={{
+                    flex:1, padding:"9px 6px", border:"none", borderRadius:8, cursor:"pointer",
+                    background:vistaResumen===id ? (id==="compartido"?"#7C3AED":C.dark) : "transparent",
+                    color:vistaResumen===id?"#fff":C.mid,
+                    fontFamily:sans, fontWeight:700, fontSize:12,
+                    letterSpacing:"0.06em", textTransform:"uppercase", transition:"all .15s",
+                  }}>{label}</button>
+                ))}
+              </div>
+
+              {/* ══ VISTA PERSONAL ══ */}
+              {vistaResumen==="personal" && <>
+
+              {/* Remanente */}
+              <div style={{...card,marginBottom:14,borderLeft:`3px solid ${remanente>=0?C.green:C.red}`}}>
+                <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:10}}>Remanente del mes</div>
+                <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Ingresos</span>
+                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.green}}>+{fmt(totalI)}</span>
+                  </div>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Gastos</span>
+                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.red}}>−{fmt(totalG)}</span>
+                  </div>
+                  {totalA>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Ahorro/Inversión</span>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.blue}}>−{fmt(totalA)}</div>
+                        {totalA_USD>0&&<div style={{fontFamily:sans,fontSize:10,color:C.blue}}>{fmtUSD(totalA_USD)}</div>}
+                      </div>
+                    </div>
+                  )}
+                  {totalI>0&&totalI_USD>0&&(
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                      <span style={{fontFamily:sans,fontSize:10,color:C.mid,fontStyle:"italic"}}>  incl. {fmtUSD(totalI_USD)} en ingresos</span>
+                    </div>
+                  )}
+                  <div style={{height:1,background:C.rule,margin:"2px 0"}}/>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink}}>Remanente</span>
+                    <span style={{fontFamily:serif,fontSize:24,fontWeight:900,color:remanente>=0?C.green:C.red}}>{fmt(remanente)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Objetivo de Ahorro */}
+              {(totalA > 0 || objAhorroMes > 0) && (
+                <div style={{...card, marginBottom:14, borderLeft:`3px solid ${C.blue}`}}>
+                  <div style={{fontFamily:sans, fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:C.mid, marginBottom:10}}>Objetivo de Ahorro</div>
+                  <div style={{display:"flex", flexDirection:"column", gap:6}}>
+                    {/* Mes */}
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
+                      <span style={{fontFamily:sans, fontSize:12, color:C.mid}}>{MESES[filtroMes]} — Ahorrado</span>
+                      <div style={{textAlign:"right"}}>
+                        <div style={{fontFamily:serif, fontSize:16, fontWeight:900, color:C.blue}}>{fmt(totalA)}</div>
+                        {totalA_USD>0 && <div style={{fontFamily:sans, fontSize:11, color:C.blue, fontWeight:700}}>{fmtUSD(totalA_USD)}</div>}
+                      </div>
+                    </div>
+                    {objAhorroMes > 0 && (
+                      <>
+                        <div style={{height:5, background:C.bg, borderRadius:3, overflow:"hidden"}}>
+                          <div style={{width:`${Math.min((totalA/objAhorroMes)*100,100)}%`, height:"100%", background:totalA>=objAhorroMes?C.green:C.blue, transition:"width .5s"}}/>
+                        </div>
+                        <div style={{display:"flex", justifyContent:"space-between"}}>
+                          <span style={{fontFamily:sans, fontSize:10, color:C.mid}}>Objetivo: {fmt(objAhorroMes)}</span>
+                          <span style={{fontFamily:sans, fontSize:10, fontWeight:700, color:totalA>=objAhorroMes?C.green:C.blue}}>
+                            {totalA>=objAhorroMes ? `+${fmt(totalA-objAhorroMes)}` : `-${fmt(objAhorroMes-totalA)}`}
+                          </span>
+                        </div>
+                      </>
+                    )}
+
+
+                  </div>
+                </div>
+              )}
+
+              {/* Indisp / Discr */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+                <div style={{...card,borderLeft:`3px solid ${C.accent}`}}>
+                  <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Indispensable</div>
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.accent}}>{fmt(indispT)}</div>
+                </div>
+                <div style={{...card,borderLeft:"3px solid #4A7CC7"}}>
+                  <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Discrecional</div>
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:"#4A7CC7"}}>{fmt(discrT)}</div>
+                </div>
+              </div>
+
+              {/* Real vs Presupuesto */}
+              {totalPresup>0&&(
+                <div style={{...card,marginBottom:14,borderLeft:`3px solid ${dif>0?C.red:C.green}`}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                    <div>
+                      <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:4}}>Real vs Presupuesto</div>
+                      <div style={{fontFamily:"Georgia,serif",fontSize:11,color:C.mid}}>{MESES[filtroMes]}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:15,color:dif>0?C.red:C.green}}>
+                        {dif>0?"+":""}{fmt(dif)}
+                      </div>
+                      <div style={{fontFamily:sans,fontSize:10,color:dif>0?C.red:C.green,fontWeight:700}}>
+                        {dif>0?"Exceso":"Ahorro"} {Math.abs(dif/totalPresup*100).toFixed(1)}%
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
+                    <div>
+                      <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:C.mid,marginBottom:3}}>Presupuestado</div>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:C.ink}}>{fmt(totalPresup)}</div>
+                    </div>
+                    <div>
+                      <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:C.mid,marginBottom:3}}>Real</div>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:dif>0?C.red:C.green}}>{fmt(totalG)}</div>
+                    </div>
+                  </div>
+                  <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden"}}>
+                    <div style={{width:`${Math.min(pctExec,100)}%`,height:"100%",background:dif>0?C.red:C.green,transition:"width .5s"}}/>
+                  </div>
+                  <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginTop:4}}>{pctExec.toFixed(0)}% ejecutado del presupuesto</div>
+                </div>
+              )}
+
+
+
+              </>}
+
+              {/* ══ VISTA COMPARTIDA ══ */}
+              {vistaResumen==="compartido" && <>
+
+              {/* ── GASTOS COMPARTIDOS ── */}
+              <div style={{...card, marginBottom:14, borderLeft:`3px solid #7C3AED`}}>
+                <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10}}>
+                  <div>
+                    <div style={{fontFamily:sans, fontSize:10, fontWeight:700, letterSpacing:"0.12em", textTransform:"uppercase", color:C.mid, marginBottom:3}}>Gastos compartidos</div>
+                    <div style={{fontFamily:sans, fontSize:11, color:C.mid}}>Total del hogar · {gastosComp.length} movimientos</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontFamily:serif, fontSize:22, fontWeight:900, color:"#7C3AED"}}>{fmt(totalComp)}</div>
+                    {totalPresupComp>0 && (
+                      <div style={{fontFamily:sans, fontSize:10, color:totalComp>totalPresupComp?C.red:C.green, fontWeight:700}}>
+                        {totalComp>totalPresupComp?"Exceso":"Ahorro"}: {fmt(Math.abs(totalComp-totalPresupComp))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {totalPresupComp>0 && (
+                  <div>
+                    <div style={{height:5, background:C.bg, borderRadius:3, overflow:"hidden", marginBottom:4}}>
+                      <div style={{width:`${Math.min((totalComp/totalPresupComp)*100,100)}%`, height:"100%", background:totalComp>totalPresupComp?C.red:"#7C3AED", transition:"width .5s"}}/>
+                    </div>
+                    <div style={{fontFamily:sans, fontSize:10, color:C.mid}}>
+                      {((totalComp/totalPresupComp)*100).toFixed(0)}% del presupuesto compartido · Presup: {fmt(totalPresupComp)}
+                    </div>
+                  </div>
+                )}
+                {/* Desglose por categoría — todas las que tienen presupuesto o gasto compartido */}
+                {(() => {
+                  const catsComp = cats.filter(c => {
+                    const tienePresup = (presupCompMes[c.id]||0) > 0;
+                    const tieneGasto  = gastosComp.some(g=>g.gasto===c.id);
+                    return tienePresup || tieneGasto;
+                  });
+                  if(catsComp.length===0) return null;
+                  return (
+                    <div style={{marginTop:10, display:"flex", flexDirection:"column", gap:0}}>
+                      {catsComp.map(c=>{
+                        const pc = presupCompMes[c.id]||0;
+                        const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+g.monto_dividir,0);
+                        const dif = gc - pc;
+                        const over = pc>0 && dif>0;
+                        const isI = c.tipo==="Indispensable";
+                        return (
+                          <div key={c.id} style={{padding:"8px 0", borderTop:`1px solid ${C.rule}`}}>
+                            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
+                              <div style={{display:"flex", alignItems:"center", gap:7}}>
+                                <div style={{width:22, height:22, borderRadius:5, background:isI?C.tagI:C.tagD, display:"flex", alignItems:"center", justifyContent:"center"}}>
+                                  <Icon name={c.icon||"star"} size={11} color={isI?C.accent:"#4A7CC7"}/>
+                                </div>
+                                <span style={{fontFamily:sans, fontWeight:600, fontSize:12, color:C.ink}}>{c.label}</span>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <span style={{fontFamily:serif, fontSize:14, fontWeight:900, color:gc>0?"#7C3AED":C.mid}}>{gc>0?fmt(gc):"—"}</span>
+                                {pc>0 && <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmt(dif)} vs {fmt(pc)}</div>}
+                              </div>
+                            </div>
+                            {pc>0 && (
+                              <div style={{height:3, background:C.bg, borderRadius:2, overflow:"hidden"}}>
+                                <div style={{width:`${Math.min((gc/pc)*100,100)}%`, height:"100%", background:over?C.red:"#7C3AED"}}/>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
+              </div>
+
+              </>}
+
+              {/* ══ DESGLOSE PERSONAL POR CATEGORÍA ══ */}
+              {vistaResumen==="personal" && <>
+              {porCat.length===0 ? (
+                <div style={{textAlign:"center",color:C.mid,padding:"40px 0",fontFamily:serif,fontSize:20,fontWeight:900}}>Sin gastos en {MESES[filtroMes]}</div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {porCat.map(({id,label,tipo,icon,total,count})=>{
+                    const pct=Math.round((total/totalG)*100);
+                    const isI=tipo==="Indispensable";
+                    const presupCat=presupMes[id]||0;
+                    const difCat=total-presupCat;
+                    const over=presupCat>0&&difCat>0;
+                    const barW=presupCat>0?Math.min((total/presupCat)*100,100):pct;
+                    const barCol=presupCat>0?(over?C.red:C.green):(isI?C.accent:"#4A7CC7");
+                    return (
+                      <div key={id} style={{...card}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                          <div style={{width:32,height:32,borderRadius:7,flexShrink:0,background:isI?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <Icon name={icon||"star"} size={14} color={isI?C.accent:"#4A7CC7"}/>
+                          </div>
+                          <span style={{flex:1,fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{label}</span>
+                          <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:C.red}}>{fmt(total)}</span>
+                        </div>
+                        <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
+                          <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
+                        </div>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
+                          <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
+                            {count} registro{count!==1?"s":""}
+                            {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmt(presupCat)}</span>}
+                          </span>
+                          {presupCat>0
+                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmt(difCat)}</span>
+                            :<span style={{fontFamily:sans,fontSize:10,color:C.mid,fontWeight:700}}>{pct}%</span>
+                          }
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              </>}
+
+              {/* ══ REPORTE ANUAL ══ */}
+              {(() => {
+                // Annual calcs - personal
+                const presupAnualCat = {};
+                const gastoAnualCat  = {};
+                cats.forEach(c => {
+                  presupAnualCat[c.id] = Object.values(presup).reduce((s,m)=>s+(m[c.id]||0),0);
+                  gastoAnualCat[c.id]  = gastos.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+                });
+                const totalGAnual  = Object.values(gastoAnualCat).reduce((s,v)=>s+v,0);
+                const totalPAnual  = Object.values(presupAnualCat).reduce((s,v)=>s+v,0);
+                const rafAnual     = totalPAnual - totalGAnual;
+
+                // Annual calcs - compartido
+                const presupCompAnualCat = {};
+                const gastoCompAnualCat  = {};
+                cats.forEach(c => {
+                  presupCompAnualCat[c.id] = Object.values(presupComp).reduce((s,m)=>s+(m[c.id]||0),0);
+                  gastoCompAnualCat[c.id]  = gastos.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto"&&g.monto_dividir).reduce((s,g)=>s+g.monto_dividir,0);
+                });
+                const totalGCompAnual = Object.values(gastoCompAnualCat).reduce((s,v)=>s+v,0);
+                const totalPCompAnual = Object.values(presupCompAnualCat).reduce((s,v)=>s+v,0);
+                const rafComp         = totalPCompAnual - totalGCompAnual;
+
+                const isComp = vistaRep==="compartido";
+                const COLOR  = isComp ? "#7C3AED" : C.dark;
+                const catsRep = cats.filter(c =>
+                  isComp
+                    ? (presupCompAnualCat[c.id]>0 || gastoCompAnualCat[c.id]>0)
+                    : (presupAnualCat[c.id]>0 || gastoAnualCat[c.id]>0)
+                );
+
+                const totalGR  = isComp ? totalGCompAnual  : totalGAnual;
+                const totalPR  = isComp ? totalPCompAnual  : totalPAnual;
+                const rafR     = isComp ? rafComp          : rafAnual;
+
+                return (
+                  <div style={{marginTop:8}}>
+                    {/* Header */}
+                    <div style={{background:C.dark, borderRadius:"12px 12px 0 0", padding:"16px 16px 0"}}>
+                      <div style={{fontFamily:sans, fontSize:10, letterSpacing:"0.2em", textTransform:"uppercase", color:C.faint, marginBottom:4}}>Seguimiento · 2026</div>
+                      <div style={{fontFamily:serif, fontSize:26, fontWeight:900, color:"#F4F0EB", marginBottom:12}}>Reporte Anual</div>
+
+                      {/* Toggle */}
+                      <div style={{display:"flex", gap:0, background:"#2A2724", borderRadius:8, padding:3, marginBottom:14}}>
+                        {[["personal","Personal"],["compartido","Compartido"]].map(([id,label])=>(
+                          <button key={id} onClick={()=>setVistaRep(id)} style={{
+                            flex:1, padding:"8px 6px", border:"none", borderRadius:6, cursor:"pointer",
+                            background:vistaRep===id?(id==="compartido"?"#7C3AED":"#F0EDE8"):"transparent",
+                            color:vistaRep===id?(id==="compartido"?"#fff":C.dark):C.faint,
+                            fontFamily:sans, fontWeight:700, fontSize:11,
+                            letterSpacing:"0.06em", textTransform:"uppercase",
+                          }}>{label}</button>
+                        ))}
+                      </div>
+
+                      {/* Summary boxes */}
+                      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6, paddingTop:0}}>
+                        {[
+                          {label:"GASTADO AÑO", value:fmt(totalGR), col:C.red},
+                          {label:"PRESUP. AÑO",  value:fmt(totalPR), col:"#4A7CC7"},
+                        ].map(b=>(
+                          <div key={b.label} style={{background:"rgba(255,255,255,0.08)", borderRadius:8, padding:"10px", borderLeft:`3px solid ${b.col}`}}>
+                            <div style={{fontFamily:sans, fontSize:8, letterSpacing:"0.1em", color:C.faint, marginBottom:4}}>{b.label}</div>
+                            <div style={{fontFamily:serif, fontSize:13, fontWeight:900, color:b.col}}>{b.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, paddingBottom:16}}>
+                        {[
+                          {label:"RAF",              value:fmt(rafR),       col:rafR>=0?C.green:C.red},
+                          ...(!isComp && (totalAAnual>0||objAhorroAnual>0) ? [{label:"AHORRO AÑO", value:fmt(totalAAnual), col:C.blue, sub:totalAAnual_USD>0?fmtUSD(totalAAnual_USD):(objAhorroAnual>0?`Obj: ${fmt(objAhorroAnual)}`:"")}] : []),
+                        ].map(b=>(
+                          <div key={b.label} style={{background:"rgba(255,255,255,0.08)", borderRadius:8, padding:"10px", borderLeft:`3px solid ${b.col}`}}>
+                            <div style={{fontFamily:sans, fontSize:8, letterSpacing:"0.1em", color:C.faint, marginBottom:4}}>{b.label}</div>
+                            <div style={{fontFamily:serif, fontSize:13, fontWeight:900, color:b.col}}>{b.value}</div>
+                            {b.sub && <div style={{fontFamily:sans, fontSize:8, color:C.faint, marginTop:2}}>{b.sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Category rows */}
+                    <div style={{background:C.paper, borderRadius:"0 0 12px 12px", overflow:"hidden", boxShadow:"0 2px 8px rgba(0,0,0,0.08)"}}>
+                      {/* Column headers */}
+                      <div style={{display:"grid", gridTemplateColumns:"1fr 80px 80px 80px", gap:4, padding:"8px 12px", background:"#2A2724"}}>
+                        <span style={{fontFamily:sans, fontSize:9, fontWeight:700, letterSpacing:"0.1em", color:C.faint, textTransform:"uppercase"}}>Categoría</span>
+                        <span style={{fontFamily:sans, fontSize:9, fontWeight:700, letterSpacing:"0.1em", color:C.faint, textTransform:"uppercase", textAlign:"right"}}>Gastado</span>
+                        <span style={{fontFamily:sans, fontSize:9, fontWeight:700, letterSpacing:"0.1em", color:C.faint, textTransform:"uppercase", textAlign:"right"}}>Presup.</span>
+                        <span style={{fontFamily:sans, fontSize:9, fontWeight:700, letterSpacing:"0.1em", color:C.faint, textTransform:"uppercase", textAlign:"right"}}>RAF</span>
+                      </div>
+
+                      {catsRep.length===0 ? (
+                        <div style={{textAlign:"center", color:C.mid, padding:"24px", fontFamily:sans, fontSize:13}}>
+                          Sin datos — cargá el presupuesto {isComp?"compartido":"personal"}
+                        </div>
+                      ) : (
+                        <>
+                        {/* Ahorro row — solo en vista personal */}
+                        {!isComp && (totalAAnual>0 || objAhorroAnual>0) && (
+                          <div style={{
+                            display:"grid", gridTemplateColumns:"1fr 80px 80px 80px", gap:4,
+                            padding:"10px 12px", alignItems:"center",
+                            background:"#EEF3FF",
+                            borderLeft:`3px solid ${C.blue}`,
+                          }}>
+                            <div>
+                              <div style={{fontFamily:sans, fontWeight:700, fontSize:12, color:C.blue}}>Ahorro / Inversión</div>
+                              {objAhorroAnual>0 && (
+                                <div style={{height:3, background:C.rule, borderRadius:2, overflow:"hidden", marginTop:4}}>
+                                  <div style={{width:`${Math.min((totalAAnual/objAhorroAnual)*100,100)}%`, height:"100%", background:totalAAnual>=objAhorroAnual?C.green:C.blue}}/>
+                                </div>
+                              )}
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:C.blue}}>{totalAAnual>0?fmt(totalAAnual):"—"}</div>
+                              {totalAAnual_USD>0 && <div style={{fontFamily:sans, fontSize:10, color:C.blue, fontWeight:700}}>{fmtUSD(totalAAnual_USD)}</div>}
+                            </div>
+                            <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:objAhorroAnual>0?C.ink:C.mid, textAlign:"right"}}>{objAhorroAnual>0?fmt(objAhorroAnual):"—"}</div>
+                            <div style={{fontFamily:serif, fontSize:12, fontWeight:900, textAlign:"right",
+                              color:objAhorroAnual>0?(totalAAnual>=objAhorroAnual?C.green:C.red):C.mid}}>
+                              {objAhorroAnual>0?fmt(totalAAnual-objAhorroAnual):"—"}
+                            </div>
+                          </div>
+                        )}
+                        {catsRep.map((c,i)=>{
+                          const gastado = isComp ? gastoCompAnualCat[c.id]  : gastoAnualCat[c.id];
+                          const pAnual  = isComp ? presupCompAnualCat[c.id] : presupAnualCat[c.id];
+                          const raf2    = pAnual - gastado;
+                          const over    = raf2 < 0;
+                          const isI     = c.tipo==="Indispensable";
+                          return (
+                            <div key={c.id} style={{
+                              display:"grid", gridTemplateColumns:"1fr 80px 80px 80px", gap:4,
+                              padding:"10px 12px", alignItems:"center",
+                              background:i%2===0?C.paper:"#F8F5F1",
+                              borderLeft:`3px solid ${isI?C.accent:"#4A7CC7"}`,
+                            }}>
+                              <div>
+                                <div style={{fontFamily:sans, fontWeight:700, fontSize:12, color:C.ink}}>{c.label}</div>
+                                {pAnual>0 && (
+                                  <div style={{height:3, background:C.rule, borderRadius:2, overflow:"hidden", marginTop:4}}>
+                                    <div style={{width:`${Math.min((gastado/pAnual)*100,100)}%`, height:"100%", background:over?C.red:(isComp?"#7C3AED":C.green)}}/>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:gastado>0?C.red:C.mid, textAlign:"right"}}>{gastado>0?fmt(gastado):"—"}</div>
+                              <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:pAnual>0?C.ink:C.mid, textAlign:"right"}}>{pAnual>0?fmt(pAnual):"—"}</div>
+                              <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:pAnual>0?(over?C.red:C.green):C.mid, textAlign:"right"}}>{pAnual>0?fmt(raf2):"—"}</div>
+                            </div>
+                          );
+                        })}
+                        </>
+                      )}
+
+                      {/* Footer */}
+                      <div style={{padding:"10px 12px", background:C.dark, borderTop:`1px solid #2A2724`}}>
+                        <div style={{fontFamily:sans, fontSize:9, color:C.faint, textAlign:"center", letterSpacing:"0.1em"}}>
+                          CONTROL DE GASTOS · 2026 · {new Date().toLocaleDateString("es-AR")}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+          );
+        })()}
+      </div>
+
+      {/* ── MODAL REPORTE ── */}
+      {reporteImg && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.92)",zIndex:200,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"flex-start",padding:"20px 16px",overflowY:"auto"}} onClick={()=>setReporteImg(null)}>
+          <div style={{width:"100%",maxWidth:460}} onClick={e=>e.stopPropagation()}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <span style={{fontFamily:sans,fontWeight:700,fontSize:13,color:"#F4F0EB",letterSpacing:"0.08em",textTransform:"uppercase"}}>Reporte generado</span>
+              <button onClick={()=>setReporteImg(null)} style={{background:"none",border:"none",cursor:"pointer"}}>
+                <Icon name="x" size={18} color="#A09890"/>
+              </button>
+            </div>
+            <img src={reporteImg} style={{width:"100%",borderRadius:10}} alt="Reporte"/>
+            <div style={{marginTop:12,padding:"12px 16px",background:"#2A2724",borderRadius:10,textAlign:"center"}}>
+              <p style={{fontFamily:sans,fontSize:12,color:"#A09890",marginBottom:4}}>📱 Mantené presionada la imagen para guardarla en tu galería</p>
+              <p style={{fontFamily:sans,fontSize:11,color:"#6B6460"}}>Desde ahí podés compartirla por WhatsApp</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SETTINGS MINI MENU ── */}
+      {modal==="settings" && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}>
+          <div style={{background:C.bg,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:460,padding:"20px 16px 32px"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:serif,fontSize:20,fontWeight:900,color:C.ink,marginBottom:16}}>Configuración</div>
+
+            {/* ── Cuenta / sesión ── */}
+            <div style={{background:C.bg,borderRadius:10,border:`1px solid ${C.rule}`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+              <div>
+                <div style={{fontFamily:sans,fontWeight:700,fontSize:12,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Cuenta</div>
+                {isGuest
+                  ? <div style={{fontFamily:sansR,fontSize:13,color:C.mid}}>Modo local · sin sincronización</div>
+                  : <div style={{fontFamily:sansR,fontSize:13,color:C.ink}}>{authUser?.email || authUser?.displayName || "Sesión activa"}</div>
+                }
+                {authUser && !isGuest && syncReady &&
+                  <div style={{fontFamily:sansR,fontSize:11,color:C.green,marginTop:2}}>✓ Sincronizado con Firebase</div>
+                }
+              </div>
+              <button onClick={doLogout}
+                style={{background:C.tagI,border:`1px solid ${C.rule}`,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:sans,fontWeight:700,fontSize:12,color:C.accent}}>
+                {isGuest ? "Iniciar sesión" : "Cerrar sesión"}
+              </button>
+            </div>
+
+            {[
+              {id:"cats",    icon:"list",     label:"Categorías",              sub:"Agregar, editar o eliminar"},
+              {id:"tarjetas",icon:"card",     label:"Tarjetas de crédito",     sub:"Nombre, dígitos y cierre"},
+              {id:"presup",      icon:"barchart", label:"Presupuesto mensual",     sub:"Montos por categoría y mes"},
+              {id:"presupComp",  icon:"transfer", label:"Presupuesto compartido",   sub:"Total del hogar con tu pareja"},
+              {id:"objAhorro",   icon:"star",     label:"Objetivo de ahorro",        sub:"Meta mensual de ahorro/inversión"},
+            ].map(({id,icon,label,sub})=>(
+              <button key={id} onClick={()=>setModal(id)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:C.paper,borderRadius:10,border:`1px solid ${C.rule}`,marginBottom:8,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
+                <div style={{width:36,height:36,borderRadius:8,background:C.tagD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                  <Icon name={icon} size={16} color={C.blue}/>
+                </div>
+                <div style={{textAlign:"left"}}>
+                  <div style={{fontFamily:sans,fontWeight:700,fontSize:14,color:C.ink}}>{label}</div>
+                  <div style={{fontFamily:sans,fontSize:11,color:C.mid,marginTop:1}}>{sub}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {modal==="cats"       && <ModalCats/>}
+      {modal==="presupComp" && <ModalPresupComp/>}
+      {modal==="objAhorro"   && <ModalObjAhorro/>}
+      {modal==="tarjetas" && <ModalTarjetas/>}
+      {modal==="presup"   && <ModalPresup/>}
+      </div>
+    </div>
+  );
+}
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App/>);
+  </script>
+</body>
+</html>
