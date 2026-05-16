@@ -530,7 +530,15 @@ function App() {
   "categoria": "la más apropiada de esta lista: ${allCatNames}"
 }
 Tarjetas disponibles: ${tarjetasNames}
-Si no podés determinar un campo usá null.`}
+Si no podés determinar un campo usá null.
+
+Reglas específicas de categorización:
+- PedidosYa, Rappi o cualquier app de delivery de supermercado → categoría Supermercado
+- Smiles, compra de millas, programas de fidelidad de aerolíneas → categoría Viajes
+- McDonald's, Burger King, restaurantes, bares, cafeterías → categoría Comidas afuera
+- Netflix, Spotify, Disney+, HBO, suscripciones digitales → categoría Suscripciones
+- Farmacity, farmacias, médicos, clínicas → categoría Salud
+- MercadoPago sin comercio identificado → categoría Transferencia`}
           ]}]
         })
       });
