@@ -502,6 +502,15 @@ function App() {
   const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite') || null);
   const [showJoinPrompt,setShowJoinPrompt]= useState(false);
 
+  /* ── BALANCE TAB LOCAL STATE ── */
+  const [balModal,    setBalModal]    = useState(null); // "gasto"|"pago"|"cats"
+  const [balEditGC,   setBalEditGC]   = useState(null);
+  const [balInvInput, setBalInvInput] = useState("");
+  const [balJoining,  setBalJoining]  = useState(false);
+  const [balJoinErr,  setBalJoinErr]  = useState("");
+  const [balCreating, setBalCreating] = useState(false);
+  const [balCopied,   setBalCopied]   = useState(false);
+
   const FORM_INIT = {
     fecha:today(), gasto:cats[0]?.id||"", observacion:"",
     tipo_mov:"Gasto", via:"Débito", tarjeta:"",
@@ -2477,13 +2486,13 @@ Reglas específicas de categorización:
 
         {/* ════ BALANCE */}
         {tab==="balance" && (()=>{
-          const [modalComp, setModalComp] = React.useState(null);
-          const [editGC,    setEditGC]    = React.useState(null);
-          const [invInput,  setInvInput]  = React.useState("");
-          const [joining,   setJoining]   = React.useState(false);
-          const [joinErr,   setJoinErr]   = React.useState("");
-          const [creating,  setCreating]  = React.useState(false);
-          const [copied,    setCopied]    = React.useState(false);
+          const modalComp = balModal,    setModalComp = setBalModal;
+          const editGC    = balEditGC,   setEditGC    = setBalEditGC;
+          const invInput  = balInvInput, setInvInput  = setBalInvInput;
+          const joining   = balJoining,  setJoining   = setBalJoining;
+          const joinErr   = balJoinErr,  setJoinErr   = setBalJoinErr;
+          const creating  = balCreating, setCreating  = setBalCreating;
+          const copied    = balCopied,   setCopied    = setBalCopied;
 
           if (!groupId) {
             return (
