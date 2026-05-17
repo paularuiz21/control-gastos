@@ -227,7 +227,8 @@ const fechaImpacto = (fecha, tid, tarjetas) => {
   const t = tarjetas.find(t=>t.id===tid);
   if (!t) return fecha;
   const d = new Date(fecha+"T12:00:00");
-  const x = d.getDate()<=t.cierre ? 1 : 2;
+  const cierre = getCierre(t, fecha);
+  const x = d.getDate()<=cierre ? 1 : 2;
   return new Date(d.getFullYear(), d.getMonth()+x, 1).toISOString().split("T")[0];
 };
 
