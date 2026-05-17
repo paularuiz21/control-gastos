@@ -2010,7 +2010,13 @@ Reglas específicas de categorización:
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
           <label style={{...lbl,margin:0}}>Monto</label>
           <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontFamily:sans,fontSize:11,color:C.mid,fontWeight:600}}>
-            <input type="checkbox" checked={form.dividir} onChange={e=>setForm({...form,dividir:e.target.checked,monto:"",monto_dividir:""})} style={{accentColor:C.dark}}/>
+            <input type="checkbox" checked={form.dividir} onChange={e=>{
+              const on=e.target.checked;
+              setForm({...form, dividir:on,
+                monto:         on ? "" : (form.monto_dividir||form.monto),
+                monto_dividir: on ? (form.monto||form.monto_dividir) : "",
+              });
+            }} style={{accentColor:C.dark}}/>
             <Icon name="scissors" size={11} color={C.mid}/> Dividir en 2
           </label>
         </div>
