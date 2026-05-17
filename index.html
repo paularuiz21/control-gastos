@@ -496,11 +496,14 @@ function App() {
   const [scanLoading,  setScanLoading]  = useState(false);
 
   /* ── GROUP STATE ── */
-  const [groupId,       setGroupId]       = useState(null);
-  const [groupData,     setGroupData]     = useState(null);
-  const [groupReady,    setGroupReady]    = useState(false);
-  const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite') || null);
-  const [showJoinPrompt,setShowJoinPrompt]= useState(false);
+  const [groupId,           setGroupId]           = useState(null);
+  const [groupData,         setGroupData]         = useState(null);
+  const [groupReady,        setGroupReady]        = useState(false);
+  const [pendingInvite,     setPendingInvite]     = useState(() => new URLSearchParams(window.location.search).get('invite') || null);
+  const [showJoinPrompt,    setShowJoinPrompt]    = useState(false);
+  const [gastosCompSynced,  setGastosCompSynced]  = useState([]);
+  const gastosCompSyncedRef = React.useRef([]);
+  useEffect(() => { gastosCompSyncedRef.current = gastosCompSynced; }, [gastosCompSynced]);
 
   /* ── BALANCE TAB LOCAL STATE ── */
   const [balModal,    setBalModal]    = useState(null); // "gasto"|"pago"|"cats"
@@ -551,6 +554,10 @@ function App() {
         if (data.presupComp && typeof data.presupComp === "object") setPresupComp(data.presupComp);
         if (data.objAhorro  && typeof data.objAhorro  === "object") setObjAhorro(data.objAhorro);
         if (data.groupId)                                            setGroupId(data.groupId);
+        if (Array.isArray(data.gastosCompSynced)) {
+          setGastosCompSynced(data.gastosCompSynced);
+          gastosCompSyncedRef.current = data.gastosCompSynced;
+        }
       }
       setSyncReady(true);
     });
@@ -559,8 +566,8 @@ function App() {
   /* ── FIREBASE: guardar en Firestore cuando cambia cualquier estado ── */
   useEffect(() => {
     if (!authUser || isGuest || !syncReady) return;
-    fsSave(authUser.uid, { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro, groupId });
-  }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, groupId, syncReady]);
+    fsSave(authUser.uid, { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro, groupId, gastosCompSynced });
+  }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, groupId, gastosCompSynced, syncReady]);
 
   /* ── FIREBASE: escuchar grupo en tiempo real ── */
   useEffect(() => {
@@ -572,6 +579,37 @@ function App() {
     }, err => { console.warn("group snapshot error:", err); setGroupReady(true); });
     return unsub;
   }, [groupId]);
+
+  /* ── AUTO-SYNC: gastos del grupo → movimientos personales ── */
+  useEffect(() => {
+    if (!groupData || !authUser || !cats.length) return;
+    const myUid   = authUser.uid;
+    const catsComp = groupData.catsComp || CATS_COMP_DEFAULT;
+    const unsynced = (groupData.gastosComp||[]).filter(g => !gastosCompSyncedRef.current.includes(g.id));
+    if (!unsynced.length) return;
+    const newGastos = unsynced.map(g => {
+      const isMyEntry = g.pagadoPor === myUid;
+      const myShare   = isMyEntry ? g.montoMio : g.montoOtro;
+      const viaFinal  = isMyEntry ? (g.via || "Efectivo") : "Otra persona";
+      const fi        = (isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha;
+      const catLabel  = catsComp.find(c=>c.id===g.catId)?.label?.toLowerCase()||"";
+      const catMatch  = cats.find(c=>c.label.toLowerCase()===catLabel) || cats[0];
+      return {
+        id: "gc_"+g.id,
+        fecha: g.fecha, fecha_impacto: fi,
+        gasto: catMatch?.id,
+        observacion: g.observacion||"",
+        tipo_mov:"gasto", tipo:catMatch?.tipo||"Discrecional",
+        via: viaFinal, tarjeta:(isMyEntry&&g.tarjeta)?g.tarjeta:null,
+        monto_dividir:null, monto:myShare,
+        moneda:"ARS", monto_original:null, tcambio:null,
+      };
+    });
+    const newIds = unsynced.map(g=>g.id);
+    gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, ...newIds];
+    setGastosCompSynced(s=>[...s,...newIds]);
+    setGastos(gs=>[...newGastos,...gs]);
+  }, [groupData]);
 
   /* ── Mostrar prompt de invitación si hay token en la URL ── */
   useEffect(() => {
@@ -699,8 +737,12 @@ Reglas específicas de categorización:
       // Sumar al balance compartido si está marcado
       if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
         const montoT = parseFloat(form.monto_dividir)||0;
+        const gcId = Date.now();
+        // Marcar como sincronizado antes de escribir a Firestore (evita duplicado del auto-sync)
+        gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, gcId];
+        setGastosCompSynced(s=>[...s, gcId]);
         const gastoComp = {
-          id: Date.now(),
+          id: gcId,
           fecha: form.fecha,
           catId: form.gasto,
           observacion: form.observacion,
@@ -710,6 +752,8 @@ Reglas específicas de categorización:
           montoMio:  montoT/2,
           splitType: "percent",
           splitValue: 50,
+          via: form.via,
+          tarjeta: form.tarjeta||null,
         };
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
@@ -1337,19 +1381,25 @@ Reglas específicas de categorización:
 
     const guardarComp = () => {
       if (!montoN||!groupId) return;
-      // Vía de pago final: si pagó la otra persona, siempre "Otra persona"
+      const entryId  = editItem?.id || Date.now();
+      const myShare  = isPayer ? montoMio : montoOtro; // mi porción real
       const viaFinal = !isPayer
         ? "Otra persona"
         : (fg.tarjeta ? (tarjetas.find(t=>t.id===fg.tarjeta)?.label||"Crédito") : fg.via);
       const fi = (isPayer && fg.tarjeta) ? fechaImpacto(fg.fecha, fg.tarjeta, tarjetas) : fg.fecha;
 
-      // Guardar en el balance del grupo
+      // Marcar como sincronizado ANTES de escribir (evita duplicado del auto-sync)
+      gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, entryId];
+      setGastosCompSynced(s=>[...s, entryId]);
+
+      // Guardar en el balance del grupo (incluye via+tarjeta para referencia)
       const nuevo = {
-        id: editItem?.id||Date.now(),
+        id: entryId,
         fecha: fg.fecha, catId: fg.catId, observacion: fg.observacion,
         monto: montoN, pagadoPor: fg.pagadoPor,
         montoOtro, montoMio,
         splitType: fg.splitType, splitValue: fg.splitValue,
+        via: isPayer ? fg.via : null, tarjeta: isPayer ? (fg.tarjeta||null) : null,
       };
       if (editItem) {
         const newG = (groupData.gastosComp||[]).map(g=>g.id===editItem.id?nuevo:g);
@@ -1360,24 +1410,18 @@ Reglas específicas de categorización:
         });
       }
 
-      // Crear gasto personal por mi porción
-      const catLabel  = getCatComp(fg.catId).label.toLowerCase();
-      const catMatch  = cats.find(c=>c.label.toLowerCase()===catLabel) || cats[0];
+      // Crear gasto personal inmediatamente (misma lógica que auto-sync)
+      const catLabel = getCatComp(fg.catId).label.toLowerCase();
+      const catMatch = cats.find(c=>c.label.toLowerCase()===catLabel) || cats[0];
       const gastoPersonal = {
-        id: Date.now()+1,
-        fecha: fg.fecha,
-        fecha_impacto: fi,
+        id: "gc_"+entryId,
+        fecha: fg.fecha, fecha_impacto: fi,
         gasto: catMatch?.id,
         observacion: fg.observacion || getCatComp(fg.catId).label,
-        tipo_mov: "gasto",
-        tipo: catMatch?.tipo||"Discrecional",
-        via: viaFinal,
-        tarjeta: (isPayer && fg.tarjeta) ? fg.tarjeta : null,
-        monto_dividir: null,
-        monto: montoMio,
-        moneda: "ARS",
-        monto_original: null,
-        tcambio: null,
+        tipo_mov:"gasto", tipo:catMatch?.tipo||"Discrecional",
+        via: viaFinal, tarjeta:(isPayer&&fg.tarjeta)?fg.tarjeta:null,
+        monto_dividir:null, monto:myShare,
+        moneda:"ARS", monto_original:null, tcambio:null,
       };
       setGastos(gs=>[gastoPersonal,...gs]);
       onClose();
