@@ -309,7 +309,7 @@ const C = {
   dark:"#1C1A17", bg:"#F0EDE8", paper:"#FFFFFF",
   rule:"#E4E0DA", ink:"#1C1A17", mid:"#A09890", faint:"#6B6460",
   accent:"#E8450A", red:"#C0392B", green:"#1A6B3A",
-  amber:"#9A5200", blue:"#1B4F9A", tagI:"#FEF0E8", tagD:"#EEF3FF",
+  amber:"#9A5200", blue:"#1B4F9A", tagI:"#FEF0E8", tagD:"#EEF3FF", comp:"#7C3AED", tagComp:"#F5F0FF",
   dark2:"#2A2724",
 };
 const sans  = "'Barlow Condensed',sans-serif";
@@ -1324,11 +1324,12 @@ Reglas específicas de categorización:
       splitValue: 50,
       ...(editItem||{}),
     });
-    const montoN   = parseFloat(fg.monto)||0;
+    const montoN    = parseFloat(fg.monto)||0;
     const montoOtro = fg.splitType==="percent"
       ? montoN*(100-fg.splitValue)/100
       : (parseFloat(fg.splitValue)||0);
-    const montoMio = montoN - montoOtro;
+    const montoMio  = montoN - montoOtro;
+    const otherName = partner?.displayName||"Otra persona";
 
     const guardarComp = () => {
       if (!montoN||!groupId) return;
@@ -1364,14 +1365,14 @@ Reglas específicas de categorización:
               return (
                 <button key={c.id} onClick={()=>setFg({...fg,catId:c.id})} style={{
                   padding:"9px 11px",borderRadius:9,cursor:"pointer",textAlign:"left",
-                  border:`1.5px solid ${active?C.blue:C.rule}`,
-                  background:active?C.blue:C.paper,
+                  border:`1.5px solid ${active?C.comp:C.rule}`,
+                  background:active?C.comp:C.paper,
                   display:"flex",alignItems:"center",gap:9,
                 }}>
                   <div style={{width:28,height:28,borderRadius:7,flexShrink:0,
-                    background:active?"rgba(255,255,255,0.15)":"#EEF3FF",
+                    background:active?"rgba(255,255,255,0.15)":C.tagComp,
                     display:"flex",alignItems:"center",justifyContent:"center"}}>
-                    <Icon name={c.icon||"star"} size={13} color={active?"#fff":C.blue}/>
+                    <Icon name={c.icon||"star"} size={13} color={active?"#fff":C.comp}/>
                   </div>
                   <span style={{fontFamily:sans,fontWeight:600,fontSize:12,color:active?"#fff":C.ink}}>{c.label}</span>
                 </button>
@@ -1399,11 +1400,11 @@ Reglas específicas de categorización:
               return (
                 <button key={m.uid} onClick={()=>setFg({...fg,pagadoPor:m.uid})} style={{
                   flex:1,padding:"10px",borderRadius:9,
-                  border:`1.5px solid ${active?C.blue:C.rule}`,
-                  background:active?C.blue:C.paper,color:active?"#fff":C.ink,
+                  border:`1.5px solid ${active?C.comp:C.rule}`,
+                  background:active?C.comp:C.paper,color:active?"#fff":C.ink,
                   fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",
                 }}>
-                  {isMe?"Yo":(m.displayName||"Pareja")}
+                  {isMe?"Yo":otherName}
                 </button>
               );
             })}
@@ -1428,20 +1429,20 @@ Reglas específicas de categorización:
             <div>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                 <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>
-                  {fg.pagadoPor===authUser?.uid?"Yo":(partner?.displayName||"Pareja")}: {fg.splitValue}%
+                  {fg.pagadoPor===authUser?.uid?"Yo":otherName}: {fg.splitValue}%
                 </span>
                 <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>
-                  {fg.pagadoPor===authUser?.uid?(partner?.displayName||"Pareja"):"Yo"}: {100-fg.splitValue}%
+                  {fg.pagadoPor===authUser?.uid?otherName:"Yo"}: {100-fg.splitValue}%
                 </span>
               </div>
               <input type="range" min="0" max="100" value={fg.splitValue}
                 onChange={e=>setFg({...fg,splitValue:parseInt(e.target.value)})}
-                style={{width:"100%",accentColor:C.blue}}/>
+                style={{width:"100%",accentColor:C.comp}}/>
             </div>
           ) : (
             <div>
               <label style={{...lbl,marginBottom:5}}>
-                Parte de {fg.pagadoPor===authUser?.uid?(partner?.displayName||"Pareja"):"yo"} (la otra persona)
+                Parte de {fg.pagadoPor===authUser?.uid?otherName:"yo"}
               </label>
               <input type="number" placeholder="0" value={fg.splitValue}
                 onChange={e=>setFg({...fg,splitValue:e.target.value})} style={inp}/>
@@ -1455,8 +1456,8 @@ Reglas específicas de categorización:
                 const amount=isPayer?montoMio:montoOtro;
                 return (
                   <div key={m.uid} style={{background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:3}}>{isMe?"Yo":(m.displayName||"Pareja")}</div>
-                    <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.blue}}>{fmt(amount)}</div>
+                    <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:3}}>{isMe?"Yo":otherName}</div>
+                    <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(amount)}</div>
                     {isPayer&&<div style={{fontFamily:sans,fontSize:9,color:C.green}}>Pagó</div>}
                   </div>
                 );
@@ -1464,7 +1465,7 @@ Reglas específicas de categorización:
             </div>
           )}
         </div>
-        <button onClick={guardarComp} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+        <button onClick={guardarComp} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
           {editItem?"Guardar cambios":"Agregar gasto compartido"}
         </button>
       </Modal>
@@ -1473,7 +1474,6 @@ Reglas específicas de categorización:
 
   /* ── MODAL: PAGO / TRANSFERENCIA ── */
   const ModalPagoComp = ({onClose}) => {
-    const partner = groupData?.members?.find(m=>m.uid!==authUser?.uid);
     const [fp, setFp] = useState({
       fecha: today(), de: authUser?.uid||"", monto: "", nota: "",
     });
@@ -1490,15 +1490,16 @@ Reglas específicas de categorización:
       });
       onClose();
     };
+    const otherName = groupData?.members?.find(m=>m.uid!==authUser?.uid)?.displayName||"Otra persona";
     return (
       <Modal title="Registrar pago" onClose={onClose}>
-        <div style={{background:"#EEF3FF",border:`1px solid #BDD0EE`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
-          <p style={{fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
+        <div style={{background:C.tagComp,border:`1px solid #C4B5FD`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+          <p style={{fontFamily:sans,fontSize:12,color:C.comp,fontWeight:600}}>
             Registrá una transferencia para saldar parte del balance.
           </p>
         </div>
         <div style={{marginBottom:14}}>
-          <label style={lbl}>¿Quién pagó?</label>
+          <label style={lbl}>¿Quién transfirió?</label>
           <div style={{display:"flex",gap:6}}>
             {(groupData?.members||[]).map(m=>{
               const active=fp.de===m.uid;
@@ -1506,11 +1507,11 @@ Reglas específicas de categorización:
               return (
                 <button key={m.uid} onClick={()=>setFp({...fp,de:m.uid})} style={{
                   flex:1,padding:"10px",borderRadius:9,
-                  border:`1.5px solid ${active?C.blue:C.rule}`,
-                  background:active?C.blue:C.paper,color:active?"#fff":C.ink,
+                  border:`1.5px solid ${active?C.comp:C.rule}`,
+                  background:active?C.comp:C.paper,color:active?"#fff":C.ink,
                   fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",
                 }}>
-                  {isMe?"Yo":(m.displayName||"Pareja")}
+                  {isMe?"Yo":otherName}
                 </button>
               );
             })}
@@ -1531,7 +1532,7 @@ Reglas específicas de categorización:
           <input type="text" placeholder="Transferencia, efectivo..." value={fp.nota}
             onChange={e=>setFp({...fp,nota:e.target.value})} style={inp}/>
         </div>
-        <button onClick={guardarPago} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+        <button onClick={guardarPago} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
           Registrar pago
         </button>
       </Modal>
@@ -1551,9 +1552,9 @@ Reglas específicas de categorización:
         <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
           {local.map((c,i)=>(
             <div key={c.id} style={{...card,display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
-              <div style={{width:28,height:28,borderRadius:6,background:"#EEF3FF",
+              <div style={{width:28,height:28,borderRadius:6,background:C.tagComp,
                 display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Icon name={c.icon||"star"} size={13} color={C.blue}/>
+                <Icon name={c.icon||"star"} size={13} color={C.comp}/>
               </div>
               <input value={c.label}
                 onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,label:e.target.value}:x))}
@@ -1574,8 +1575,8 @@ Reglas específicas de categorización:
             {ICON_OPTIONS.map(ic=>(
               <button key={ic} onClick={()=>setNueva({...nueva,icon:ic})} style={{
                 width:34,height:34,borderRadius:7,
-                border:`1.5px solid ${nueva.icon===ic?C.blue:C.rule}`,
-                background:nueva.icon===ic?C.blue:C.paper,cursor:"pointer",
+                border:`1.5px solid ${nueva.icon===ic?C.comp:C.rule}`,
+                background:nueva.icon===ic?C.comp:C.paper,cursor:"pointer",
                 display:"flex",alignItems:"center",justifyContent:"center",
               }}>
                 <Icon name={ic} size={14} color={nueva.icon===ic?"#fff":C.mid}/>
@@ -1586,7 +1587,7 @@ Reglas específicas de categorización:
             if(!nueva.label.trim()) return;
             setLocal(l=>[...l,{id:"comp_"+Date.now(),label:nueva.label.trim(),icon:nueva.icon}]);
             setNueva({label:"",icon:"star"});
-          }} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+          }} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
             Agregar categoría
           </button>
         </div>
@@ -2498,12 +2499,12 @@ Reglas específicas de categorización:
             return (
               <div>
                 <div style={{textAlign:"center",padding:"28px 0 20px"}}>
-                  <div style={{width:56,height:56,borderRadius:14,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
-                    <Icon name="users" size={26} color={C.blue}/>
+                  <div style={{width:56,height:56,borderRadius:14,background:C.tagComp,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+                    <Icon name="users" size={26} color={C.comp}/>
                   </div>
                   <div style={{fontFamily:serif,fontSize:24,fontWeight:900,color:C.ink,marginBottom:8}}>Balance compartido</div>
                   <div style={{fontFamily:sans,fontSize:13,color:C.mid,lineHeight:1.6}}>
-                    Llevá los gastos con tu pareja y sabé en cualquier momento quién le debe cuánto al otro.
+                    Llevá los gastos con otra persona y sabé en cualquier momento quién le debe cuánto al otro.
                   </div>
                 </div>
                 {!isGuest ? (
@@ -2516,14 +2517,14 @@ Reglas específicas de categorización:
                         fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
                       }
                       setCreating(false);
-                    }} disabled={creating} style={{width:"100%",padding:"14px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:creating?.6:1}}>
+                    }} disabled={creating} style={{width:"100%",padding:"14px",borderRadius:10,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:creating?.6:1}}>
                       <Icon name="users" size={15} color="#fff"/>
                       {creating?"Creando grupo…":"Crear grupo"}
                     </button>
                     <div style={{textAlign:"center",color:C.mid,fontSize:12,fontFamily:sans}}>— o —</div>
                     <div style={{...card}}>
                       <label style={lbl}>Unirte con código de invitación</label>
-                      <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Pedile a tu pareja que comparta el link y pegá las 8 letras del final.</div>
+                      <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Pedile a la otra persona que comparta el link y pegá las 8 letras del final.</div>
                       <div style={{display:"flex",gap:8}}>
                         <input value={invInput} onChange={e=>setInvInput(e.target.value.trim().toUpperCase())}
                           placeholder="Ej: ABC12345"
@@ -2553,6 +2554,19 @@ Reglas específicas de categorización:
             );
           }
 
+          const leaveGroup = async () => {
+            if (!window.confirm("¿Salir del grupo compartido? Tus datos personales no se borran.")) return;
+            try {
+              if (fbDb && groupId) {
+                const newMembers = (groupData?.members||[]).filter(m=>m.uid!==authUser?.uid);
+                const newUids    = (groupData?.memberUids||[]).filter(id=>id!==authUser?.uid);
+                await fbDb.collection("groups").doc(groupId).update({members:newMembers, memberUids:newUids});
+              }
+            } catch(e) { console.warn("leaveGroup error:", e); }
+            setGroupId(null); setGroupData(null); setGroupReady(false);
+            fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:null});
+          };
+
           const gastosComp = groupData?.gastosComp||[];
           const pagos       = groupData?.pagos||[];
           const members     = groupData?.members||[];
@@ -2569,19 +2583,19 @@ Reglas específicas de categorización:
 
           return (
             <div>
-              <div style={{...card,marginBottom:14,borderLeft:`3px solid ${balance>=0?C.green:C.red}`,background:balance>=0?"#F0FBF5":"#FFF5F5"}}>
-                <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:8}}>Balance actual</div>
+              <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.comp}`,background:C.tagComp}}>
+                <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.comp,marginBottom:8}}>Balance actual</div>
                 {balance===0 ? (
                   <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>¡Están al día!</div>
                 ) : balance>0 ? (
                   <div>
                     <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.green}}>{fmt(balance)}</div>
-                    <div style={{fontFamily:sans,fontSize:13,color:C.green,marginTop:4}}>{partner?.displayName||"Tu pareja"} te debe {fmt(balance)}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.green,marginTop:4}}>{partner?.displayName||"Otra persona"} te debe {fmt(balance)}</div>
                   </div>
                 ) : (
                   <div>
                     <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.red}}>{fmt(Math.abs(balance))}</div>
-                    <div style={{fontFamily:sans,fontSize:13,color:C.red,marginTop:4}}>Le debés {fmt(Math.abs(balance))} a {partner?.displayName||"tu pareja"}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.red,marginTop:4}}>Le debés {fmt(Math.abs(balance))} a {partner?.displayName||"otra persona"}</div>
                   </div>
                 )}
                 <div style={{display:"flex",gap:6,marginTop:12}}>
@@ -2589,8 +2603,8 @@ Reglas específicas de categorización:
                     const isMe=m.uid===myUid;
                     const paid=gastosComp.filter(g=>g.pagadoPor===m.uid).reduce((s,g)=>s+g.monto,0);
                     return (
-                      <div key={m.uid} style={{flex:1,background:C.paper,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                        <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:2}}>{isMe?"Yo":(m.displayName||"Pareja")}</div>
+                      <div key={m.uid} style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                        <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:2}}>{isMe?"Yo":(m.displayName||"Otra persona")}</div>
                         <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.ink}}>{fmt(paid)}</div>
                         <div style={{fontFamily:sans,fontSize:9,color:C.mid}}>pagado</div>
                       </div>
@@ -2600,7 +2614,7 @@ Reglas específicas de categorización:
               </div>
 
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-                <button onClick={()=>setModalComp("gasto")} style={{padding:"12px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <button onClick={()=>setModalComp("gasto")} style={{padding:"12px",borderRadius:10,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                   <Icon name="plus" size={14} color="#fff"/>Agregar gasto
                 </button>
                 <button onClick={()=>setModalComp("pago")} style={{padding:"12px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
@@ -2610,7 +2624,7 @@ Reglas específicas de categorización:
 
               {members.length<2 && (
                 <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.amber}`}}>
-                  <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.amber,marginBottom:6}}>Invitá a tu pareja</div>
+                  <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.amber,marginBottom:6}}>Invitá a otra persona</div>
                   <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Mandá este link por WhatsApp:</div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     <div style={{flex:1,background:C.bg,borderRadius:7,padding:"8px 10px",fontFamily:sansR,fontSize:11,color:C.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{inviteUrl}</div>
@@ -2633,11 +2647,11 @@ Reglas específicas de categorización:
                     if (item.tipo==="gasto") {
                       const cat=getCatComp(item.catId);
                       const isPayer=item.pagadoPor===myUid;
-                      const payerName=isPayer?"Yo":(partner?.displayName||"Pareja");
+                      const payerName=isPayer?"Yo":(partner?.displayName||"Otra persona");
                       return (
                         <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12}}>
-                          <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                            <Icon name={cat.icon||"star"} size={16} color={C.blue}/>
+                          <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:C.tagComp,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <Icon name={cat.icon||"star"} size={16} color={C.comp}/>
                           </div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -2655,7 +2669,7 @@ Reglas específicas de categorización:
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                             <div style={{textAlign:"right"}}>
-                              <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.blue}}>{fmt(item.monto)}</div>
+                              <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(item.monto)}</div>
                               <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -2674,8 +2688,8 @@ Reglas específicas de categorización:
                       );
                     } else {
                       const isFromMe=item.de===myUid;
-                      const fromName=isFromMe?"Yo":(partner?.displayName||"Pareja");
-                      const toName=!isFromMe?"Yo":(partner?.displayName||"Pareja");
+                      const fromName=isFromMe?"Yo":(partner?.displayName||"Otra persona");
+                      const toName=!isFromMe?"Yo":(partner?.displayName||"Otra persona");
                       return (
                         <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12,background:"#F0FBF5"}}>
                           <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:"#D1FAE5",display:"flex",alignItems:"center",justifyContent:"center"}}>
@@ -2707,6 +2721,9 @@ Reglas específicas de categorización:
               )}
               <button onClick={()=>setModalComp("cats")} style={{marginTop:14,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 <Icon name="list" size={13} color={C.mid}/>Categorías compartidas
+              </button>
+              <button onClick={leaveGroup} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:"none",color:C.mid,fontFamily:sans,fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="x" size={12} color={C.mid}/>Salir del grupo
               </button>
               {modalComp==="gasto" && <ModalGastoComp onClose={()=>setModalComp(null)}/>}
               {editGC && <ModalGastoComp onClose={()=>setEditGC(null)} editItem={editGC}/>}
