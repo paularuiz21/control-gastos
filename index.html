@@ -2734,14 +2734,9 @@ Reglas específicas de categorización:
                 </div>
               </div>
 
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-                <button onClick={()=>setModalComp("gasto")} style={{padding:"12px",borderRadius:10,border:"none",background:C.comp,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  <Icon name="plus" size={14} color="#fff"/>Agregar gasto
-                </button>
-                <button onClick={()=>setModalComp("pago")} style={{padding:"12px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
-                  <Icon name="transfer" size={14} color="#fff"/>Registrar pago
-                </button>
-              </div>
+              <button onClick={()=>setModalComp("pago")} style={{width:"100%",marginBottom:14,padding:"12px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="transfer" size={14} color="#fff"/>Registrar transferencia
+              </button>
 
               {members.length<2 && (
                 <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.amber}`}}>
@@ -2846,7 +2841,6 @@ Reglas específicas de categorización:
               <button onClick={leaveGroup} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:"none",color:C.mid,fontFamily:sans,fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 <Icon name="x" size={12} color={C.mid}/>Salir del grupo
               </button>
-              {modalComp==="gasto" && <ModalGastoComp onClose={()=>setModalComp(null)}/>}
               {editGC && <ModalGastoComp onClose={()=>setEditGC(null)} editItem={editGC}/>}
               {modalComp==="pago"  && <ModalPagoComp  onClose={()=>setModalComp(null)}/>}
               {modalComp==="cats"  && <ModalCatsComp  onClose={()=>setModalComp(null)}/>}
