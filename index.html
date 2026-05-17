@@ -1312,16 +1312,19 @@ Reglas específicas de categorización:
 
   /* ── MODAL: GASTO COMPARTIDO ── */
   const ModalGastoComp = ({onClose, editItem=null}) => {
-    const partner = groupData?.members?.find(m=>m.uid!==authUser?.uid);
+    const myUid   = authUser?.uid;
+    const partner = groupData?.members?.find(m=>m.uid!==myUid);
     const catsComp = groupData?.catsComp || CATS_COMP_DEFAULT;
     const [fg, setFg] = useState({
       fecha: today(),
       catId: catsComp[0]?.id||"",
       observacion: "",
       monto: "",
-      pagadoPor: authUser?.uid||"",
+      pagadoPor: myUid||"",
       splitType: "percent",
       splitValue: 50,
+      via: "Efectivo",
+      tarjeta: "",
       ...(editItem||{}),
     });
     const montoN    = parseFloat(fg.monto)||0;
@@ -1330,9 +1333,17 @@ Reglas específicas de categorización:
       : (parseFloat(fg.splitValue)||0);
     const montoMio  = montoN - montoOtro;
     const otherName = partner?.displayName||"Otra persona";
+    const isPayer   = fg.pagadoPor === myUid;
 
     const guardarComp = () => {
       if (!montoN||!groupId) return;
+      // Vía de pago final: si pagó la otra persona, siempre "Otra persona"
+      const viaFinal = !isPayer
+        ? "Otra persona"
+        : (fg.tarjeta ? (tarjetas.find(t=>t.id===fg.tarjeta)?.label||"Crédito") : fg.via);
+      const fi = (isPayer && fg.tarjeta) ? fechaImpacto(fg.fecha, fg.tarjeta, tarjetas) : fg.fecha;
+
+      // Guardar en el balance del grupo
       const nuevo = {
         id: editItem?.id||Date.now(),
         fecha: fg.fecha, catId: fg.catId, observacion: fg.observacion,
@@ -1348,6 +1359,27 @@ Reglas específicas de categorización:
           gastosComp: firebase.firestore.FieldValue.arrayUnion(nuevo)
         });
       }
+
+      // Crear gasto personal por mi porción
+      const catLabel  = getCatComp(fg.catId).label.toLowerCase();
+      const catMatch  = cats.find(c=>c.label.toLowerCase()===catLabel) || cats[0];
+      const gastoPersonal = {
+        id: Date.now()+1,
+        fecha: fg.fecha,
+        fecha_impacto: fi,
+        gasto: catMatch?.id,
+        observacion: fg.observacion || getCatComp(fg.catId).label,
+        tipo_mov: "gasto",
+        tipo: catMatch?.tipo||"Discrecional",
+        via: viaFinal,
+        tarjeta: (isPayer && fg.tarjeta) ? fg.tarjeta : null,
+        monto_dividir: null,
+        monto: montoMio,
+        moneda: "ARS",
+        monto_original: null,
+        tcambio: null,
+      };
+      setGastos(gs=>[gastoPersonal,...gs]);
       onClose();
     };
 
@@ -1396,9 +1428,9 @@ Reglas específicas de categorización:
           <div style={{display:"flex",gap:6}}>
             {(groupData?.members||[]).map(m=>{
               const active=fg.pagadoPor===m.uid;
-              const isMe=m.uid===authUser?.uid;
+              const isMe=m.uid===myUid;
               return (
-                <button key={m.uid} onClick={()=>setFg({...fg,pagadoPor:m.uid})} style={{
+                <button key={m.uid} onClick={()=>setFg({...fg,pagadoPor:m.uid,via:"Efectivo",tarjeta:""})} style={{
                   flex:1,padding:"10px",borderRadius:9,
                   border:`1.5px solid ${active?C.comp:C.rule}`,
                   background:active?C.comp:C.paper,color:active?"#fff":C.ink,
@@ -1410,6 +1442,51 @@ Reglas específicas de categorización:
             })}
           </div>
         </div>
+        {/* Vía de pago — solo si pagué yo */}
+        {isPayer ? (
+          <div style={{marginBottom:14}}>
+            <label style={lbl}>Vía de pago</label>
+            <div style={{display:"flex",gap:6,marginBottom:8}}>
+              {VIAS_OTRAS.map(({id,label,icon})=>{
+                const active=fg.via===id&&!fg.tarjeta;
+                return (
+                  <button key={id} onClick={()=>setFg({...fg,via:id,tarjeta:""})} style={{
+                    flex:1,padding:"9px 6px",borderRadius:8,
+                    border:`1.5px solid ${active?C.dark:C.rule}`,
+                    background:active?C.dark:C.paper,color:active?"#fff":C.mid,
+                    fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer",
+                    display:"flex",alignItems:"center",justifyContent:"center",gap:5,
+                  }}>
+                    <Icon name={icon} size={12} color={active?"#fff":C.mid}/>{label}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {tarjetas.map(t=>{
+                const active=fg.tarjeta===t.id;
+                return (
+                  <button key={t.id} onClick={()=>setFg({...fg,via:"Crédito",tarjeta:t.id})} style={{
+                    padding:"9px 11px",borderRadius:9,cursor:"pointer",
+                    border:`1.5px solid ${active?C.dark:C.rule}`,background:active?C.dark:C.paper,
+                    display:"flex",alignItems:"center",gap:8,
+                  }}>
+                    <Icon name="card" size={14} color={active?"#fff":"#4A7CC7"}/>
+                    <div style={{textAlign:"left"}}>
+                      <div style={{fontFamily:sans,fontWeight:700,fontSize:11,color:active?"#fff":C.ink}}>{t.label}</div>
+                      <div style={{fontFamily:sans,fontSize:9,color:active?"rgba(255,255,255,0.5)":C.mid}}>{t.sub}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          <div style={{marginBottom:14,padding:"9px 13px",borderRadius:9,background:C.tagComp,display:"flex",alignItems:"center",gap:8}}>
+            <Icon name="users" size={13} color={C.comp}/>
+            <span style={{fontFamily:sans,fontSize:12,fontWeight:600,color:C.comp}}>Vía de pago: Otra persona</span>
+          </div>
+        )}
         <div style={{...card,marginBottom:14}}>
           <label style={lbl}>División</label>
           <div style={{display:"flex",gap:6,marginBottom:10}}>
