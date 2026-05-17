@@ -90,6 +90,16 @@ Se reconstruyó la app desde cero con todas las mejoras acumuladas:
 
 ---
 
+### Corrección — Los gastos con tarjeta aparecían en el mes equivocado
+
+**Qué pasaba:** un gasto cargado con tarjeta de crédito mostraba correctamente el mes en que iba a impactar (por ejemplo, "JUN"), pero en la lista de movimientos aparecía en el mes siguiente (julio en lugar de junio).
+
+**Por qué pasaba:** en una mejora anterior se había hecho que el día de cierre de cada tarjeta pudiera variar por mes. Para eso se cambió el formato interno de ese dato. El problema es que una parte del código — la que calcula en qué mes cae realmente el gasto — quedó sin actualizar y seguía leyendo el dato en el formato viejo, que ahora no reconocía. Ante la confusión, siempre sumaba dos meses en lugar de uno.
+
+**Cómo se resolvió:** se corrigió esa parte del código para que lea el día de cierre de la misma forma que el resto de la app ya lo hacía.
+
+---
+
 ### Corrección — Categorías de Ingreso y Ahorro no se guardaban
 
 **Qué pasaba:** al editar los nombres de las categorías de Ingreso o Ahorro, los cambios se perdían al cerrar. Las categorías de Gasto sí se guardaban correctamente.
