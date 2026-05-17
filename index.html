@@ -624,6 +624,10 @@ function App() {
   }, [authUser, isGuest, syncReady, pendingInvite, groupId]);
 
   const set = (k) => (e) => setForm({...form,[k]:e.target.value});
+  // Helpers para input de monto con separadores de miles
+  const fmtARS  = v => { if(!v) return ""; const n=parseInt(String(v).replace(/\D/g,""),10); return isNaN(n)?"":new Intl.NumberFormat("es-AR",{maximumFractionDigits:0}).format(n); };
+  const parseARS = v => String(v).replace(/\D/g,"");
+  const parseUSD = v => String(v).replace(/[^\d.]/g,"");
 
   // Always render cats in alphabetical order regardless of storage order
   const catsSorted = [...cats].sort((a,b) => a.label.localeCompare(b.label, "es"));
@@ -1507,8 +1511,9 @@ Reglas específicas de categorización:
         </div>
         <div style={{...card,marginBottom:14}}>
           <label style={lbl}>Monto total</label>
-          <input type="number" placeholder="$ 0" value={fg.monto}
-            onChange={e=>setFg({...fg,monto:e.target.value})}
+          <input type="text" inputMode="decimal" placeholder="$ 0"
+            value={fmtARS(fg.monto)}
+            onChange={e=>setFg({...fg,monto:parseARS(e.target.value)})}
             style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}}/>
         </div>
         <div style={{marginBottom:14}}>
@@ -1688,8 +1693,9 @@ Reglas específicas de categorización:
         </div>
         <div style={{...card,marginBottom:14}}>
           <label style={lbl}>Monto</label>
-          <input type="number" placeholder="$ 0" value={fp.monto}
-            onChange={e=>setFp({...fp,monto:e.target.value})}
+          <input type="text" inputMode="decimal" placeholder="$ 0"
+            value={fmtARS(fp.monto)}
+            onChange={e=>setFp({...fp,monto:parseARS(e.target.value)})}
             style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}}/>
         </div>
         <div style={{marginBottom:14}}>
@@ -2022,7 +2028,10 @@ Reglas específicas de categorización:
         </div>
         {form.dividir ? (
           <div>
-            <input type="number" placeholder="Monto total" value={form.monto_dividir} onChange={set("monto_dividir")} style={inp}/>
+            <input type="text" inputMode="decimal" placeholder="Monto total"
+              value={fmtARS(form.monto_dividir)}
+              onChange={e=>setForm({...form,monto_dividir:parseARS(e.target.value)})}
+              style={inp}/>
             {form.monto_dividir && (
               <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
                 Tu parte: {fmt(parseFloat(form.monto_dividir)/2)}
@@ -2039,8 +2048,11 @@ Reglas específicas de categorización:
             )}
           </div>
         ) : (
-          <input type="number" placeholder="$ 0" value={form.monto} onChange={set("monto")}
-            style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}} placeholder={form.moneda==="USD"?"U$S 0":"$ 0"}
+          <input type="text" inputMode="decimal"
+            placeholder={form.moneda==="USD"?"U$S 0":"$ 0"}
+            value={form.moneda==="USD" ? form.monto : fmtARS(form.monto)}
+            onChange={e=>setForm({...form,monto:form.moneda==="USD"?parseUSD(e.target.value):parseARS(e.target.value)})}
+            style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}}
             onKeyDown={e=>e.key==="Enter"&&guardar()}/>
         )}
       </div>
