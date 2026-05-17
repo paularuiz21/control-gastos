@@ -777,7 +777,17 @@ Reglas específicas de categorización:
     setTab("cargar"); setModal(null);
   };
 
-  const eliminarGasto = (id) => setGastos(gs=>gs.filter(g=>g.id!==id));
+  const eliminarGasto = (id) => {
+    setGastos(gs=>gs.filter(g=>g.id!==id));
+    // Si es un gasto sincronizado desde el balance (id = "gc_<número>"), borrarlo también del grupo
+    if (typeof id === "string" && id.startsWith("gc_") && groupId && fbDb && groupData) {
+      const gcId = Number(id.slice(3));
+      const newGC = (groupData.gastosComp||[]).filter(g=>g.id!==gcId);
+      fbDb.collection("groups").doc(groupId).update({gastosComp:newGC});
+      gastosCompSyncedRef.current = gastosCompSyncedRef.current.filter(x=>x!==gcId);
+      setGastosCompSynced(s=>s.filter(x=>x!==gcId));
+    }
+  };
 
   /* ── BALANCE COMPARTIDO ── */
   const calcBalance = (gastosComp, pagos, myUid) => {
@@ -2795,6 +2805,10 @@ Reglas específicas de categorización:
                               <button onClick={()=>{
                                 const newG=gastosComp.filter(g=>g.id!==item.id);
                                 fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
+                                // Borrar también el gasto personal sincronizado
+                                setGastos(gs=>gs.filter(g=>g.id!=="gc_"+item.id));
+                                gastosCompSyncedRef.current = gastosCompSyncedRef.current.filter(x=>x!==item.id);
+                                setGastosCompSynced(s=>s.filter(x=>x!==item.id));
                               }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
                                 <Icon name="trash" size={13} color={C.mid}/>
                               </button>
