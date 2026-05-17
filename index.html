@@ -69,6 +69,49 @@ const fsSave = debounce(async (uid, data) => {
   catch(e) { console.warn("fsSave error:", e); }
 }, 1500);
 
+/* ── FIREBASE GROUP HELPERS ───────────────────────────────── */
+const fsCreateGroup = async (uid, displayName, email) => {
+  if (!fbDb) return null;
+  try {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let token = '';
+    for(let i=0; i<8; i++) token += chars[Math.floor(Math.random()*chars.length)];
+    const ref = fbDb.collection("groups").doc();
+    const data = {
+      inviteToken: token,
+      memberUids:  [uid],
+      members:     [{uid, displayName: displayName||email||"Usuario", email: email||""}],
+      catsComp:    CATS_COMP_DEFAULT,
+      presupComp:  {},
+      gastosComp:  [],
+      pagos:       [],
+    };
+    await ref.set(data);
+    return {groupId: ref.id, ...data};
+  } catch(e) { console.warn("fsCreateGroup error:", e); return null; }
+};
+
+const fsJoinGroup = async (token, uid, displayName, email) => {
+  if (!fbDb) return null;
+  try {
+    const snap = await fbDb.collection("groups")
+      .where("inviteToken","==",token.toUpperCase().trim()).limit(1).get();
+    if (snap.empty) return "notfound";
+    const doc = snap.docs[0];
+    const data = doc.data();
+    if ((data.memberUids||[]).includes(uid)) return {groupId: doc.id, ...data};
+    if ((data.memberUids||[]).length >= 2) return "full";
+    const newMember = {uid, displayName: displayName||email||"Usuario", email: email||""};
+    const updated = {
+      ...data,
+      memberUids: [...(data.memberUids||[]), uid],
+      members:    [...(data.members||[]),    newMember],
+    };
+    await doc.ref.set(updated);
+    return {groupId: doc.id, ...updated};
+  } catch(e) { console.warn("fsJoinGroup error:", e); return null; }
+};
+
 /* ── SVG ICONS ────────────────────────────────────────────── */
 const Ic = ({ d, size=16, color="currentColor", sw=1.7 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color}
@@ -114,6 +157,7 @@ const ICONS = {
   delivery:  ["M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h11a2 2 0 012 2v3","M9 17h6","M13 17h3a2 2 0 002-2v-3","M16 5h2l3 5v4h-5V5z","M5.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3z","M18.5 21a1.5 1.5 0 100-3 1.5 1.5 0 000 3z"],
   utensils:  ["M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2","M7 2v20","M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"],
   zap:       ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
+  users:     ["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2","M23 21v-2a4 4 0 00-3-3.87","M16 3.13a4 4 0 010 7.75","M9 7a4 4 0 100 8 4 4 0 000-8z"],
 };
 const Icon = ({name,size=16,color="currentColor",sw=1.7}) => {
   const d=ICONS[name]; if(!d) return null;
@@ -159,6 +203,17 @@ const CATS_AHORRO = [
   {id:"usd_cuenta",  label:"USD en cuenta",         icon:"transfer"},
   {id:"inversiones", label:"Inversiones varias",    icon:"barchart"},
   {id:"otro_ahorro", label:"Otros ahorros",         icon:"star"},
+];
+
+const CATS_COMP_DEFAULT = [
+  {id:"comp_alquiler",  label:"Alquiler",      icon:"home"},
+  {id:"comp_expensas",  label:"Expensas",       icon:"building"},
+  {id:"comp_super",     label:"Supermercado",   icon:"cart"},
+  {id:"comp_servicios", label:"Servicios",      icon:"wallet"},
+  {id:"comp_comidas",   label:"Comidas afuera", icon:"utensils"},
+  {id:"comp_delivery",  label:"Delivery",       icon:"delivery"},
+  {id:"comp_viajes",    label:"Viajes",         icon:"plane"},
+  {id:"comp_otros",     label:"Otros",          icon:"star"},
 ];
 
 const TARJETAS_DEFAULT = [
@@ -440,11 +495,18 @@ function App() {
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("v1_anthropic_key") || "");
   const [scanLoading,  setScanLoading]  = useState(false);
 
+  /* ── GROUP STATE ── */
+  const [groupId,       setGroupId]       = useState(null);
+  const [groupData,     setGroupData]     = useState(null);
+  const [groupReady,    setGroupReady]    = useState(false);
+  const [pendingInvite, setPendingInvite] = useState(() => new URLSearchParams(window.location.search).get('invite') || null);
+  const [showJoinPrompt,setShowJoinPrompt]= useState(false);
+
   const FORM_INIT = {
     fecha:today(), gasto:cats[0]?.id||"", observacion:"",
     tipo_mov:"Gasto", via:"Débito", tarjeta:"",
     monto_dividir:"", monto:"", dividir:false,
-    moneda:"ARS", tcambio:"",
+    moneda:"ARS", tcambio:"", sumar_balance:false,
   };
   const [form, setForm] = useState(FORM_INIT);
 
@@ -479,6 +541,7 @@ function App() {
         if (data.presup     && typeof data.presup     === "object") setPresup(data.presup);
         if (data.presupComp && typeof data.presupComp === "object") setPresupComp(data.presupComp);
         if (data.objAhorro  && typeof data.objAhorro  === "object") setObjAhorro(data.objAhorro);
+        if (data.groupId)                                            setGroupId(data.groupId);
       }
       setSyncReady(true);
     });
@@ -487,8 +550,25 @@ function App() {
   /* ── FIREBASE: guardar en Firestore cuando cambia cualquier estado ── */
   useEffect(() => {
     if (!authUser || isGuest || !syncReady) return;
-    fsSave(authUser.uid, { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro });
-  }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, syncReady]);
+    fsSave(authUser.uid, { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro, groupId });
+  }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, groupId, syncReady]);
+
+  /* ── FIREBASE: escuchar grupo en tiempo real ── */
+  useEffect(() => {
+    if (!groupId || !fbDb || isGuest) return;
+    setGroupReady(false);
+    const unsub = fbDb.collection("groups").doc(groupId).onSnapshot(snap => {
+      if (snap.exists) setGroupData(snap.data());
+      setGroupReady(true);
+    }, err => { console.warn("group snapshot error:", err); setGroupReady(true); });
+    return unsub;
+  }, [groupId]);
+
+  /* ── Mostrar prompt de invitación si hay token en la URL ── */
+  useEffect(() => {
+    if (!authUser || isGuest || !syncReady || !pendingInvite || groupId) return;
+    setShowJoinPrompt(true);
+  }, [authUser, isGuest, syncReady, pendingInvite, groupId]);
 
   const set = (k) => (e) => setForm({...form,[k]:e.target.value});
 
@@ -607,6 +687,25 @@ Reglas específicas de categorización:
       setEditando(null); setModal(null);
     } else {
       setGastos(gs=>[nuevo,...gs]);
+      // Sumar al balance compartido si está marcado
+      if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
+        const montoT = parseFloat(form.monto_dividir)||0;
+        const gastoComp = {
+          id: Date.now(),
+          fecha: form.fecha,
+          catId: form.gasto,
+          observacion: form.observacion,
+          monto: montoT,
+          pagadoPor: authUser.uid,
+          montoOtro: montoT/2,
+          montoMio:  montoT/2,
+          splitType: "percent",
+          splitValue: 50,
+        };
+        fbDb.collection("groups").doc(groupId).update({
+          gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
+        });
+      }
     }
     setForm(FORM_INIT);
     setSaved(true); setTimeout(()=>setSaved(false),1600);
@@ -626,6 +725,20 @@ Reglas específicas de categorización:
   };
 
   const eliminarGasto = (id) => setGastos(gs=>gs.filter(g=>g.id!==id));
+
+  /* ── BALANCE COMPARTIDO ── */
+  const calcBalance = (gastosComp, pagos, myUid) => {
+    if (!myUid) return 0;
+    let b = 0;
+    (gastosComp||[]).forEach(g => {
+      const mo = g.montoOtro || 0;
+      if (g.pagadoPor === myUid) b += mo; else b -= mo;
+    });
+    (pagos||[]).forEach(p => {
+      if (p.de === myUid) b += p.monto; else b -= p.monto;
+    });
+    return b;
+  };
 
   /* ── FILTERED DATA ── */
   const filtrados = gastos.filter(g => {
@@ -1188,6 +1301,293 @@ Reglas específicas de categorización:
   };
 
 
+  /* ── MODAL: GASTO COMPARTIDO ── */
+  const ModalGastoComp = ({onClose, editItem=null}) => {
+    const partner = groupData?.members?.find(m=>m.uid!==authUser?.uid);
+    const catsComp = groupData?.catsComp || CATS_COMP_DEFAULT;
+    const [fg, setFg] = useState({
+      fecha: today(),
+      catId: catsComp[0]?.id||"",
+      observacion: "",
+      monto: "",
+      pagadoPor: authUser?.uid||"",
+      splitType: "percent",
+      splitValue: 50,
+      ...(editItem||{}),
+    });
+    const montoN   = parseFloat(fg.monto)||0;
+    const montoOtro = fg.splitType==="percent"
+      ? montoN*(100-fg.splitValue)/100
+      : (parseFloat(fg.splitValue)||0);
+    const montoMio = montoN - montoOtro;
+
+    const guardarComp = () => {
+      if (!montoN||!groupId) return;
+      const nuevo = {
+        id: editItem?.id||Date.now(),
+        fecha: fg.fecha, catId: fg.catId, observacion: fg.observacion,
+        monto: montoN, pagadoPor: fg.pagadoPor,
+        montoOtro, montoMio,
+        splitType: fg.splitType, splitValue: fg.splitValue,
+      };
+      if (editItem) {
+        const newG = (groupData.gastosComp||[]).map(g=>g.id===editItem.id?nuevo:g);
+        fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
+      } else {
+        fbDb.collection("groups").doc(groupId).update({
+          gastosComp: firebase.firestore.FieldValue.arrayUnion(nuevo)
+        });
+      }
+      onClose();
+    };
+
+    return (
+      <Modal title={editItem?"Editar gasto compartido":"Nuevo gasto compartido"} onClose={onClose}>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Fecha</label>
+          <input type="date" value={fg.fecha} onChange={e=>setFg({...fg,fecha:e.target.value})} style={inp}/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Categoría</label>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+            {catsComp.map(c=>{
+              const active=fg.catId===c.id;
+              return (
+                <button key={c.id} onClick={()=>setFg({...fg,catId:c.id})} style={{
+                  padding:"9px 11px",borderRadius:9,cursor:"pointer",textAlign:"left",
+                  border:`1.5px solid ${active?C.blue:C.rule}`,
+                  background:active?C.blue:C.paper,
+                  display:"flex",alignItems:"center",gap:9,
+                }}>
+                  <div style={{width:28,height:28,borderRadius:7,flexShrink:0,
+                    background:active?"rgba(255,255,255,0.15)":"#EEF3FF",
+                    display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <Icon name={c.icon||"star"} size={13} color={active?"#fff":C.blue}/>
+                  </div>
+                  <span style={{fontFamily:sans,fontWeight:600,fontSize:12,color:active?"#fff":C.ink}}>{c.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Descripción</label>
+          <input type="text" placeholder="¿Qué fue?" value={fg.observacion}
+            onChange={e=>setFg({...fg,observacion:e.target.value})} style={inp}/>
+        </div>
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>Monto total</label>
+          <input type="number" placeholder="$ 0" value={fg.monto}
+            onChange={e=>setFg({...fg,monto:e.target.value})}
+            style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}}/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>¿Quién pagó?</label>
+          <div style={{display:"flex",gap:6}}>
+            {(groupData?.members||[]).map(m=>{
+              const active=fg.pagadoPor===m.uid;
+              const isMe=m.uid===authUser?.uid;
+              return (
+                <button key={m.uid} onClick={()=>setFg({...fg,pagadoPor:m.uid})} style={{
+                  flex:1,padding:"10px",borderRadius:9,
+                  border:`1.5px solid ${active?C.blue:C.rule}`,
+                  background:active?C.blue:C.paper,color:active?"#fff":C.ink,
+                  fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",
+                }}>
+                  {isMe?"Yo":(m.displayName||"Pareja")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>División</label>
+          <div style={{display:"flex",gap:6,marginBottom:10}}>
+            {[["percent","Por %"],["monto","Por monto"]].map(([id,label])=>{
+              const active=fg.splitType===id;
+              return (
+                <button key={id} onClick={()=>setFg({...fg,splitType:id,splitValue:id==="percent"?50:""})} style={{
+                  flex:1,padding:"8px",borderRadius:8,
+                  border:`1.5px solid ${active?C.dark:C.rule}`,
+                  background:active?C.dark:C.paper,color:active?"#fff":C.mid,
+                  fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",
+                }}>{label}</button>
+              );
+            })}
+          </div>
+          {fg.splitType==="percent" ? (
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>
+                  {fg.pagadoPor===authUser?.uid?"Yo":(partner?.displayName||"Pareja")}: {fg.splitValue}%
+                </span>
+                <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>
+                  {fg.pagadoPor===authUser?.uid?(partner?.displayName||"Pareja"):"Yo"}: {100-fg.splitValue}%
+                </span>
+              </div>
+              <input type="range" min="0" max="100" value={fg.splitValue}
+                onChange={e=>setFg({...fg,splitValue:parseInt(e.target.value)})}
+                style={{width:"100%",accentColor:C.blue}}/>
+            </div>
+          ) : (
+            <div>
+              <label style={{...lbl,marginBottom:5}}>
+                Parte de {fg.pagadoPor===authUser?.uid?(partner?.displayName||"Pareja"):"yo"} (la otra persona)
+              </label>
+              <input type="number" placeholder="0" value={fg.splitValue}
+                onChange={e=>setFg({...fg,splitValue:e.target.value})} style={inp}/>
+            </div>
+          )}
+          {montoN>0 && (
+            <div style={{marginTop:10,display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {(groupData?.members||[]).map(m=>{
+                const isMe=m.uid===authUser?.uid;
+                const isPayer=m.uid===fg.pagadoPor;
+                const amount=isPayer?montoMio:montoOtro;
+                return (
+                  <div key={m.uid} style={{background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:3}}>{isMe?"Yo":(m.displayName||"Pareja")}</div>
+                    <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.blue}}>{fmt(amount)}</div>
+                    {isPayer&&<div style={{fontFamily:sans,fontSize:9,color:C.green}}>Pagó</div>}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+        <button onClick={guardarComp} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          {editItem?"Guardar cambios":"Agregar gasto compartido"}
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: PAGO / TRANSFERENCIA ── */
+  const ModalPagoComp = ({onClose}) => {
+    const partner = groupData?.members?.find(m=>m.uid!==authUser?.uid);
+    const [fp, setFp] = useState({
+      fecha: today(), de: authUser?.uid||"", monto: "", nota: "",
+    });
+    const guardarPago = () => {
+      if (!parseFloat(fp.monto)||!groupId) return;
+      const otherUid = groupData?.members?.find(m=>m.uid!==authUser?.uid)?.uid;
+      const a = fp.de===authUser?.uid ? otherUid : authUser?.uid;
+      const nuevo = {
+        id: Date.now(), fecha: fp.fecha,
+        de: fp.de, a, monto: parseFloat(fp.monto), nota: fp.nota,
+      };
+      fbDb.collection("groups").doc(groupId).update({
+        pagos: firebase.firestore.FieldValue.arrayUnion(nuevo)
+      });
+      onClose();
+    };
+    return (
+      <Modal title="Registrar pago" onClose={onClose}>
+        <div style={{background:"#EEF3FF",border:`1px solid #BDD0EE`,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
+          <p style={{fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
+            Registrá una transferencia para saldar parte del balance.
+          </p>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>¿Quién pagó?</label>
+          <div style={{display:"flex",gap:6}}>
+            {(groupData?.members||[]).map(m=>{
+              const active=fp.de===m.uid;
+              const isMe=m.uid===authUser?.uid;
+              return (
+                <button key={m.uid} onClick={()=>setFp({...fp,de:m.uid})} style={{
+                  flex:1,padding:"10px",borderRadius:9,
+                  border:`1.5px solid ${active?C.blue:C.rule}`,
+                  background:active?C.blue:C.paper,color:active?"#fff":C.ink,
+                  fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",
+                }}>
+                  {isMe?"Yo":(m.displayName||"Pareja")}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Fecha</label>
+          <input type="date" value={fp.fecha} onChange={e=>setFp({...fp,fecha:e.target.value})} style={inp}/>
+        </div>
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>Monto</label>
+          <input type="number" placeholder="$ 0" value={fp.monto}
+            onChange={e=>setFp({...fp,monto:e.target.value})}
+            style={{...inp,fontFamily:serif,fontSize:28,fontWeight:900,padding:"8px 13px"}}/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={lbl}>Nota (opcional)</label>
+          <input type="text" placeholder="Transferencia, efectivo..." value={fp.nota}
+            onChange={e=>setFp({...fp,nota:e.target.value})} style={inp}/>
+        </div>
+        <button onClick={guardarPago} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          Registrar pago
+        </button>
+      </Modal>
+    );
+  };
+
+  /* ── MODAL: CATEGORÍAS COMPARTIDAS ── */
+  const ModalCatsComp = ({onClose}) => {
+    const [local, setLocal] = useState(groupData?.catsComp||CATS_COMP_DEFAULT);
+    const [nueva, setNueva] = useState({label:"",icon:"star"});
+    const guardar = () => {
+      fbDb.collection("groups").doc(groupId).update({catsComp:local});
+      onClose();
+    };
+    return (
+      <Modal title="Categorías compartidas" onClose={onClose}>
+        <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:14}}>
+          {local.map((c,i)=>(
+            <div key={c.id} style={{...card,display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
+              <div style={{width:28,height:28,borderRadius:6,background:"#EEF3FF",
+                display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <Icon name={c.icon||"star"} size={13} color={C.blue}/>
+              </div>
+              <input value={c.label}
+                onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,label:e.target.value}:x))}
+                style={{...inp,flex:1,padding:"4px 8px",fontSize:13}}/>
+              <button onClick={()=>setLocal(l=>l.filter((_,j)=>j!==i))}
+                style={{background:"none",border:"none",cursor:"pointer"}}>
+                <Icon name="trash" size={14} color={C.mid}/>
+              </button>
+            </div>
+          ))}
+        </div>
+        <div style={{...card,marginBottom:14}}>
+          <label style={lbl}>Nueva categoría</label>
+          <input placeholder="Nombre" value={nueva.label}
+            onChange={e=>setNueva({...nueva,label:e.target.value})}
+            style={{...inp,marginBottom:8}}/>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+            {ICON_OPTIONS.map(ic=>(
+              <button key={ic} onClick={()=>setNueva({...nueva,icon:ic})} style={{
+                width:34,height:34,borderRadius:7,
+                border:`1.5px solid ${nueva.icon===ic?C.blue:C.rule}`,
+                background:nueva.icon===ic?C.blue:C.paper,cursor:"pointer",
+                display:"flex",alignItems:"center",justifyContent:"center",
+              }}>
+                <Icon name={ic} size={14} color={nueva.icon===ic?"#fff":C.mid}/>
+              </button>
+            ))}
+          </div>
+          <button onClick={()=>{
+            if(!nueva.label.trim()) return;
+            setLocal(l=>[...l,{id:"comp_"+Date.now(),label:nueva.label.trim(),icon:nueva.icon}]);
+            setNueva({label:"",icon:"star"});
+          }} style={{width:"100%",padding:"10px",borderRadius:8,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+            Agregar categoría
+          </button>
+        </div>
+        <button onClick={guardar} style={{width:"100%",padding:"13px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer"}}>
+          Guardar cambios
+        </button>
+      </Modal>
+    );
+  };
+
   /* ── MODAL OVERLAY ── */
   const Modal = ({title, onClose, children}) => (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={onClose}>
@@ -1280,7 +1680,7 @@ Reglas específicas de categorización:
 
           {/* Tabs */}
           <div style={{display:"flex"}}>
-            {[["cargar","plus","Registrar"],["lista","list","Movimientos"],["resumen","barchart","Resumen"]].map(([id,icon,label])=>{
+            {[["cargar","plus","Registrar"],["lista","list","Movimientos"],["resumen","barchart","Resumen"],["balance","users","Balance"]].map(([id,icon,label])=>{
               const active=tab===id;
               return (
                 <button key={id} onClick={()=>setTab(id)} style={{
@@ -1446,6 +1846,15 @@ Reglas específicas de categorización:
               <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
                 Tu parte: {fmt(parseFloat(form.monto_dividir)/2)}
               </div>
+            )}
+            {groupId && (
+              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginTop:10,fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
+                <input type="checkbox" checked={form.sumar_balance||false}
+                  onChange={e=>setForm({...form,sumar_balance:e.target.checked})}
+                  style={{accentColor:C.blue}}/>
+                <Icon name="users" size={13} color={C.blue}/>
+                Sumar al balance compartido
+              </label>
             )}
           </div>
         ) : (
@@ -2065,6 +2474,238 @@ Reglas específicas de categorización:
             </div>
           );
         })()}
+
+        {/* ════ BALANCE */}
+        {tab==="balance" && (()=>{
+          const [modalComp, setModalComp] = React.useState(null);
+          const [editGC,    setEditGC]    = React.useState(null);
+          const [invInput,  setInvInput]  = React.useState("");
+          const [joining,   setJoining]   = React.useState(false);
+          const [joinErr,   setJoinErr]   = React.useState("");
+          const [creating,  setCreating]  = React.useState(false);
+          const [copied,    setCopied]    = React.useState(false);
+
+          if (!groupId) {
+            return (
+              <div>
+                <div style={{textAlign:"center",padding:"28px 0 20px"}}>
+                  <div style={{width:56,height:56,borderRadius:14,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}>
+                    <Icon name="users" size={26} color={C.blue}/>
+                  </div>
+                  <div style={{fontFamily:serif,fontSize:24,fontWeight:900,color:C.ink,marginBottom:8}}>Balance compartido</div>
+                  <div style={{fontFamily:sans,fontSize:13,color:C.mid,lineHeight:1.6}}>
+                    Llevá los gastos con tu pareja y sabé en cualquier momento quién le debe cuánto al otro.
+                  </div>
+                </div>
+                {!isGuest ? (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    <button onClick={async()=>{
+                      setCreating(true);
+                      const r = await fsCreateGroup(authUser.uid, authUser.displayName||authUser.email, authUser.email);
+                      if (r) {
+                        setGroupId(r.groupId); setGroupData(r);
+                        fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
+                      }
+                      setCreating(false);
+                    }} disabled={creating} style={{width:"100%",padding:"14px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:14,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,opacity:creating?.6:1}}>
+                      <Icon name="users" size={15} color="#fff"/>
+                      {creating?"Creando grupo…":"Crear grupo"}
+                    </button>
+                    <div style={{textAlign:"center",color:C.mid,fontSize:12,fontFamily:sans}}>— o —</div>
+                    <div style={{...card}}>
+                      <label style={lbl}>Unirte con código de invitación</label>
+                      <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Pedile a tu pareja que comparta el link y pegá las 8 letras del final.</div>
+                      <div style={{display:"flex",gap:8}}>
+                        <input value={invInput} onChange={e=>setInvInput(e.target.value.trim().toUpperCase())}
+                          placeholder="Ej: ABC12345"
+                          style={{...inp,flex:1,textTransform:"uppercase",letterSpacing:"0.1em"}}/>
+                        <button onClick={async()=>{
+                          if(!invInput) return;
+                          setJoining(true); setJoinErr("");
+                          const r = await fsJoinGroup(invInput, authUser.uid, authUser.displayName||authUser.email, authUser.email);
+                          if (!r||r==="notfound") { setJoinErr("Código no encontrado"); setJoining(false); return; }
+                          if (r==="full") { setJoinErr("Este grupo ya tiene dos integrantes"); setJoining(false); return; }
+                          setGroupId(r.groupId); setGroupData(r);
+                          fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
+                          setJoining(false);
+                        }} disabled={joining} style={{padding:"10px 16px",borderRadius:8,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                          {joining?"…":"Unirme"}
+                        </button>
+                      </div>
+                      {joinErr && <div style={{color:C.red,fontSize:12,marginTop:6,fontFamily:sans}}>{joinErr}</div>}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{...card,textAlign:"center",color:C.mid,padding:24}}>
+                    <p style={{fontFamily:sans,fontSize:13}}>Iniciá sesión para usar el balance compartido.</p>
+                  </div>
+                )}
+              </div>
+            );
+          }
+
+          const gastosComp = groupData?.gastosComp||[];
+          const pagos       = groupData?.pagos||[];
+          const members     = groupData?.members||[];
+          const myUid       = authUser?.uid;
+          const partner     = members.find(m=>m.uid!==myUid);
+          const catsComp    = groupData?.catsComp||CATS_COMP_DEFAULT;
+          const balance     = calcBalance(gastosComp, pagos, myUid);
+          const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
+          const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
+          const historia    = [
+            ...gastosComp.map(g=>({...g,tipo:"gasto"})),
+            ...pagos.map(p=>({...p,tipo:"pago"})),
+          ].sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+
+          return (
+            <div>
+              <div style={{...card,marginBottom:14,borderLeft:`3px solid ${balance>=0?C.green:C.red}`,background:balance>=0?"#F0FBF5":"#FFF5F5"}}>
+                <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:8}}>Balance actual</div>
+                {balance===0 ? (
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>¡Están al día!</div>
+                ) : balance>0 ? (
+                  <div>
+                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.green}}>{fmt(balance)}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.green,marginTop:4}}>{partner?.displayName||"Tu pareja"} te debe {fmt(balance)}</div>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.red}}>{fmt(Math.abs(balance))}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.red,marginTop:4}}>Le debés {fmt(Math.abs(balance))} a {partner?.displayName||"tu pareja"}</div>
+                  </div>
+                )}
+                <div style={{display:"flex",gap:6,marginTop:12}}>
+                  {members.map(m=>{
+                    const isMe=m.uid===myUid;
+                    const paid=gastosComp.filter(g=>g.pagadoPor===m.uid).reduce((s,g)=>s+g.monto,0);
+                    return (
+                      <div key={m.uid} style={{flex:1,background:C.paper,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
+                        <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:2}}>{isMe?"Yo":(m.displayName||"Pareja")}</div>
+                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.ink}}>{fmt(paid)}</div>
+                        <div style={{fontFamily:sans,fontSize:9,color:C.mid}}>pagado</div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
+                <button onClick={()=>setModalComp("gasto")} style={{padding:"12px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  <Icon name="plus" size={14} color="#fff"/>Agregar gasto
+                </button>
+                <button onClick={()=>setModalComp("pago")} style={{padding:"12px",borderRadius:10,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                  <Icon name="transfer" size={14} color="#fff"/>Registrar pago
+                </button>
+              </div>
+
+              {members.length<2 && (
+                <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.amber}`}}>
+                  <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.amber,marginBottom:6}}>Invitá a tu pareja</div>
+                  <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Mandá este link por WhatsApp:</div>
+                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                    <div style={{flex:1,background:C.bg,borderRadius:7,padding:"8px 10px",fontFamily:sansR,fontSize:11,color:C.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{inviteUrl}</div>
+                    <button onClick={()=>{
+                      navigator.clipboard.writeText(inviteUrl).catch(()=>{});
+                      setCopied(true); setTimeout(()=>setCopied(false),2000);
+                    }} style={{padding:"8px 14px",borderRadius:8,border:"none",background:copied?C.green:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",whiteSpace:"nowrap",transition:"background .3s"}}>
+                      {copied?"✓ Copiado":"Copiar"}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:10}}>Historial</div>
+              {historia.length===0 ? (
+                <div style={{textAlign:"center",color:C.mid,padding:"32px 0",fontFamily:sans,fontSize:13}}>Sin movimientos aún</div>
+              ) : (
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {historia.map(item=>{
+                    if (item.tipo==="gasto") {
+                      const cat=getCatComp(item.catId);
+                      const isPayer=item.pagadoPor===myUid;
+                      const payerName=isPayer?"Yo":(partner?.displayName||"Pareja");
+                      return (
+                        <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12}}>
+                          <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <Icon name={cat.icon||"star"} size={16} color={C.blue}/>
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{cat.label}</span>
+                              {item.observacion&&<span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{item.observacion}</span>}
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{item.fecha}</span>
+                              <span style={{color:C.rule}}>·</span>
+                              <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>Pagó {payerName}</span>
+                              <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:isPayer?"#F0FBF5":"#FFF5F5",color:isPayer?C.green:C.red}}>
+                                {isPayer?`te deben ${fmt(item.montoOtro)}`:`debés ${fmt(item.montoOtro)}`}
+                              </span>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.blue}}>{fmt(item.monto)}</div>
+                              <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              <button onClick={()=>setEditGC(item)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
+                                <Icon name="edit" size={13} color={C.mid}/>
+                              </button>
+                              <button onClick={()=>{
+                                const newG=gastosComp.filter(g=>g.id!==item.id);
+                                fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
+                              }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
+                                <Icon name="trash" size={13} color={C.mid}/>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    } else {
+                      const isFromMe=item.de===myUid;
+                      const fromName=isFromMe?"Yo":(partner?.displayName||"Pareja");
+                      const toName=!isFromMe?"Yo":(partner?.displayName||"Pareja");
+                      return (
+                        <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12,background:"#F0FBF5"}}>
+                          <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:"#D1FAE5",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <Icon name="transfer" size={16} color={C.green}/>
+                          </div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>Transferencia</div>
+                            <div style={{display:"flex",alignItems:"center",gap:5,marginTop:3,flexWrap:"wrap"}}>
+                              <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{item.fecha}</span>
+                              <span style={{color:C.rule}}>·</span>
+                              <span style={{fontFamily:sans,fontSize:11,color:C.green}}>{fromName} → {toName}</span>
+                              {item.nota&&<span style={{fontFamily:sans,fontSize:11,color:C.mid}}>· {item.nota}</span>}
+                            </div>
+                          </div>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmt(item.monto)}</div>
+                            <button onClick={()=>{
+                              const newP=pagos.filter(p=>p.id!==item.id);
+                              fbDb.collection("groups").doc(groupId).update({pagos:newP});
+                            }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
+                              <Icon name="trash" size={13} color={C.mid}/>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })}
+                </div>
+              )}
+              <button onClick={()=>setModalComp("cats")} style={{marginTop:14,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
+                <Icon name="list" size={13} color={C.mid}/>Categorías compartidas
+              </button>
+              {modalComp==="gasto" && <ModalGastoComp onClose={()=>setModalComp(null)}/>}
+              {editGC && <ModalGastoComp onClose={()=>setEditGC(null)} editItem={editGC}/>}
+              {modalComp==="pago"  && <ModalPagoComp  onClose={()=>setModalComp(null)}/>}
+              {modalComp==="cats"  && <ModalCatsComp  onClose={()=>setModalComp(null)}/>}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ── MODAL REPORTE ── */}
@@ -2160,6 +2801,41 @@ Reglas específicas de categorización:
       {modal==="objAhorro"   && <ModalObjAhorro/>}
       {modal==="tarjetas" && <ModalTarjetas/>}
       {modal==="presup"   && <ModalPresup/>}
+
+      {/* ── PROMPT: UNIRSE A GRUPO VÍA LINK ── */}
+      {showJoinPrompt && pendingInvite && !groupId && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+          <div style={{background:C.bg,borderRadius:16,padding:24,width:"100%",maxWidth:360}}>
+            <div style={{width:48,height:48,borderRadius:12,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+              <Icon name="users" size={22} color={C.blue}/>
+            </div>
+            <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.ink,marginBottom:8}}>Invitación al grupo</div>
+            <div style={{fontFamily:sans,fontSize:13,color:C.mid,marginBottom:20,lineHeight:1.5}}>
+              Te invitaron a unirte a un balance compartido. ¿Querés aceptar?
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={async()=>{
+                if (!authUser||isGuest) { setShowJoinPrompt(false); return; }
+                const r = await fsJoinGroup(pendingInvite, authUser.uid, authUser.displayName||authUser.email, authUser.email);
+                if (r && r!=="notfound" && r!=="full") {
+                  setGroupId(r.groupId); setGroupData(r);
+                  fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
+                  window.history.replaceState({}, '', window.location.pathname);
+                }
+                setPendingInvite(null); setShowJoinPrompt(false);
+              }} style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                Unirme al grupo
+              </button>
+              <button onClick={()=>{
+                setShowJoinPrompt(false);
+                window.history.replaceState({}, '', window.location.pathname);
+              }} style={{flex:1,padding:"12px",borderRadius:10,border:`1px solid ${C.rule}`,background:C.paper,color:C.mid,fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
