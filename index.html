@@ -2714,29 +2714,6 @@ Reglas específicas de categorización:
                       <Icon name="users" size={15} color="#fff"/>
                       {creating?"Creando grupo…":"Crear grupo"}
                     </button>
-                    <div style={{textAlign:"center",color:C.mid,fontSize:12,fontFamily:sans}}>— o —</div>
-                    <div style={{...card}}>
-                      <label style={lbl}>Unirte con código de invitación</label>
-                      <div style={{fontFamily:sans,fontSize:12,color:C.mid,marginBottom:8}}>Pedile a la otra persona que comparta el link y pegá las 8 letras del final.</div>
-                      <div style={{display:"flex",gap:8}}>
-                        <input value={invInput} onChange={e=>setInvInput(e.target.value.trim().toUpperCase())}
-                          placeholder="Ej: ABC12345"
-                          style={{...inp,flex:1,textTransform:"uppercase",letterSpacing:"0.1em"}}/>
-                        <button onClick={async()=>{
-                          if(!invInput) return;
-                          setJoining(true); setJoinErr("");
-                          const r = await fsJoinGroup(invInput, authUser.uid, authUser.displayName||authUser.email, authUser.email);
-                          if (!r||r==="notfound") { setJoinErr("Código no encontrado"); setJoining(false); return; }
-                          if (r==="full") { setJoinErr("Este grupo ya tiene dos integrantes"); setJoining(false); return; }
-                          setGroupId(r.groupId); setGroupData(r);
-                          fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
-                          setJoining(false);
-                        }} disabled={joining} style={{padding:"10px 16px",borderRadius:8,border:"none",background:C.dark,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
-                          {joining?"…":"Unirme"}
-                        </button>
-                      </div>
-                      {joinErr && <div style={{color:C.red,fontSize:12,marginTop:6,fontFamily:sans}}>{joinErr}</div>}
-                    </div>
                   </div>
                 ) : (
                   <div style={{...card,textAlign:"center",color:C.mid,padding:24}}>
