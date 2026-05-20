@@ -546,6 +546,8 @@ function App() {
   /* ── FIREBASE: escuchar cambios de sesión ── */
   useEffect(() => {
     if (!FB_CONFIGURED) return;
+    // Procesar resultado del redirect de Google (necesario en mobile)
+    fbAuth.getRedirectResult().catch(e => console.warn("getRedirectResult:", e));
     const unsub = fbAuth.onAuthStateChanged(u => setAuthUser(u || false));
     return unsub;
   }, []);
