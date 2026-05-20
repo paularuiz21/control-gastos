@@ -353,7 +353,11 @@ function LoginScreen({ onGuest }) {
 
   const loginGoogle = () => withLoading(async () => {
     const p = new firebase.auth.GoogleAuthProvider();
-    await fbAuth.signInWithPopup(p);
+    // Guardar invite token antes del redirect para no perderlo al volver
+    const inv = new URLSearchParams(window.location.search).get('invite');
+    if (inv) localStorage.setItem("v3_pending_invite", inv);
+    // signInWithRedirect es más confiable en mobile que signInWithPopup
+    await fbAuth.signInWithRedirect(p);
   });
 
   const loginEmail = () => withLoading(async () => {
@@ -499,7 +503,13 @@ function App() {
   const [groupId,           setGroupId]           = useState(null);
   const [groupData,         setGroupData]         = useState(null);
   const [groupReady,        setGroupReady]        = useState(false);
-  const [pendingInvite,     setPendingInvite]     = useState(() => new URLSearchParams(window.location.search).get('invite') || null);
+  const [pendingInvite,     setPendingInvite]     = useState(() => {
+    const fromUrl = new URLSearchParams(window.location.search).get('invite');
+    if (fromUrl) return fromUrl;
+    const fromStorage = localStorage.getItem("v3_pending_invite");
+    if (fromStorage) { localStorage.removeItem("v3_pending_invite"); return fromStorage; }
+    return null;
+  });
   const [showJoinPrompt,    setShowJoinPrompt]    = useState(false);
   const [gastosCompSynced,  setGastosCompSynced]  = useState([]);
   const gastosCompSyncedRef = React.useRef([]);
