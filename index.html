@@ -869,13 +869,21 @@ Reglas específicas de categorización:
     if (!myUid) return 0;
     const hoy = new Date().toISOString().split("T")[0];
     let b = 0;
-    (gastosComp||[]).filter(g => fiComp(g) <= hoy).forEach(g => {
-      const mo = g.montoOtro || 0;
-      if (g.pagadoPor === myUid) b += mo; else b -= mo;
+    console.log("=== calcBalance ===", "hoy:", hoy);
+    (gastosComp||[]).forEach(g => {
+      const fi = fiComp(g);
+      const activo = fi <= hoy;
+      console.log("  gasto id:", g.id, "fecha:", g.fecha, "tarjeta:", g.tarjeta, "fecha_impacto:", g.fecha_impacto, "fiComp:", fi, "activo:", activo, "montoOtro:", g.montoOtro);
+      if (activo) {
+        const mo = g.montoOtro || 0;
+        if (g.pagadoPor === myUid) b += mo; else b -= mo;
+      }
     });
     (pagos||[]).forEach(p => {
+      console.log("  pago:", p);
       if (p.de === myUid) b += p.monto; else b -= p.monto;
     });
+    console.log("  resultado:", b);
     return b;
   };
 
