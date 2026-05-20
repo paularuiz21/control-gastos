@@ -358,11 +358,7 @@ function LoginScreen({ onGuest }) {
 
   const loginGoogle = () => withLoading(async () => {
     const p = new firebase.auth.GoogleAuthProvider();
-    // Guardar invite token antes del redirect para no perderlo al volver
-    const inv = new URLSearchParams(window.location.search).get('invite');
-    if (inv) localStorage.setItem("v3_pending_invite", inv);
-    // signInWithRedirect es más confiable en mobile que signInWithPopup
-    await fbAuth.signInWithRedirect(p);
+    await fbAuth.signInWithPopup(p);
   });
 
   const loginEmail = () => withLoading(async () => {
@@ -567,8 +563,6 @@ function App() {
   /* ── FIREBASE: escuchar cambios de sesión ── */
   useEffect(() => {
     if (!FB_CONFIGURED) return;
-    // Procesar resultado del redirect de Google (necesario en mobile)
-    fbAuth.getRedirectResult().catch(e => console.warn("getRedirectResult error:", e.code, e.message));
     const unsub = fbAuth.onAuthStateChanged(u => setAuthUser(u || false));
     return unsub;
   }, []);
