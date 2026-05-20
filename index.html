@@ -862,11 +862,14 @@ Reglas específicas de categorización:
   };
 
   /* ── BALANCE COMPARTIDO ── */
+  const fiComp = (g) =>
+    g.fecha_impacto || fechaImpacto(g.fecha, g.tarjeta||null, tarjetas);
+
   const calcBalance = (gastosComp, pagos, myUid) => {
     if (!myUid) return 0;
     const hoy = new Date().toISOString().split("T")[0];
     let b = 0;
-    (gastosComp||[]).filter(g => (g.fecha_impacto||g.fecha) <= hoy).forEach(g => {
+    (gastosComp||[]).filter(g => fiComp(g) <= hoy).forEach(g => {
       const mo = g.montoOtro || 0;
       if (g.pagadoPor === myUid) b += mo; else b -= mo;
     });
@@ -2796,7 +2799,7 @@ Reglas específicas de categorización:
           const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
           const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
           const hoyStr      = new Date().toISOString().split("T")[0];
-          const esActivo    = item => item.tipo==="pago" || (item.fecha_impacto||item.fecha) <= hoyStr;
+          const esActivo    = item => item.tipo==="pago" || fiComp(item) <= hoyStr;
           const historia    = [
             ...gastosComp.map(g=>({...g,tipo:"gasto"})),
             ...pagos.map(p=>({...p,tipo:"pago"})),
@@ -2864,8 +2867,9 @@ Reglas específicas de categorización:
                     const cat=getCatComp(item.catId);
                     const isPayer=item.pagadoPor===myUid;
                     const payerName=isPayer?"Yo":(partner?.displayName||"Otra persona");
-                    const mesImpacto = pending && item.fecha_impacto
-                      ? MESES[parseInt(item.fecha_impacto.substring(5,7),10)-1]
+                    const fi_item    = fiComp(item);
+                    const mesImpacto = pending && fi_item !== item.fecha
+                      ? MESES[parseInt(fi_item.substring(5,7),10)-1]
                       : null;
                     return (
                         <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12,opacity:pending?.5:1}}>
