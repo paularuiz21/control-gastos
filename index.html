@@ -784,6 +784,7 @@ Reglas específicas de categorización:
         const gastoComp = {
           id: gcId,
           fecha: form.fecha,
+          fecha_impacto: fechaImpacto(form.fecha, form.tarjeta||null, tarjetas),
           catId: form.gasto,
           observacion: form.observacion,
           monto: montoT,
@@ -856,8 +857,9 @@ Reglas específicas de categorización:
   /* ── BALANCE COMPARTIDO ── */
   const calcBalance = (gastosComp, pagos, myUid) => {
     if (!myUid) return 0;
+    const hoy = new Date().toISOString().split("T")[0];
     let b = 0;
-    (gastosComp||[]).forEach(g => {
+    (gastosComp||[]).filter(g => (g.fecha_impacto||g.fecha) <= hoy).forEach(g => {
       const mo = g.montoOtro || 0;
       if (g.pagadoPor === myUid) b += mo; else b -= mo;
     });
@@ -2786,10 +2788,14 @@ Reglas específicas de categorización:
           const balance     = calcBalance(gastosComp, pagos, myUid);
           const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
           const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
+          const hoyStr      = new Date().toISOString().split("T")[0];
+          const esActivo    = item => item.tipo==="pago" || (item.fecha_impacto||item.fecha) <= hoyStr;
           const historia    = [
             ...gastosComp.map(g=>({...g,tipo:"gasto"})),
             ...pagos.map(p=>({...p,tipo:"pago"})),
           ].sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
+          const historiaActiva    = historia.filter(esActivo);
+          const historiaPendiente = historia.filter(i=>!esActivo(i));
 
           return (
             <div>
@@ -2846,15 +2852,16 @@ Reglas específicas de categorización:
               <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:10}}>Historial</div>
               {historia.length===0 ? (
                 <div style={{textAlign:"center",color:C.mid,padding:"32px 0",fontFamily:sans,fontSize:13}}>Sin movimientos aún</div>
-              ) : (
-                <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                  {historia.map(item=>{
-                    if (item.tipo==="gasto") {
-                      const cat=getCatComp(item.catId);
-                      const isPayer=item.pagadoPor===myUid;
-                      const payerName=isPayer?"Yo":(partner?.displayName||"Otra persona");
-                      return (
-                        <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12}}>
+              ) : (() => {
+                const renderGasto = (item, pending) => {
+                    const cat=getCatComp(item.catId);
+                    const isPayer=item.pagadoPor===myUid;
+                    const payerName=isPayer?"Yo":(partner?.displayName||"Otra persona");
+                    const mesImpacto = pending && item.fecha_impacto
+                      ? MESES[parseInt(item.fecha_impacto.substring(5,7),10)-1]
+                      : null;
+                    return (
+                        <div key={item.id} style={{...card,display:"flex",alignItems:"center",gap:12,opacity:pending?.5:1}}>
                           <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:C.tagComp,display:"flex",alignItems:"center",justifyContent:"center"}}>
                             <Icon name={cat.icon||"star"} size={16} color={C.comp}/>
                           </div>
@@ -2867,9 +2874,15 @@ Reglas específicas de categorización:
                               <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{item.fecha}</span>
                               <span style={{color:C.rule}}>·</span>
                               <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>Pagó {payerName}</span>
-                              <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:isPayer?"#F0FBF5":"#FFF5F5",color:isPayer?C.green:C.red}}>
-                                {isPayer?`te deben ${fmt(item.montoOtro)}`:`debés ${fmt(item.montoOtro)}`}
-                              </span>
+                              {mesImpacto ? (
+                                <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:"#F3F4F6",color:C.mid}}>
+                                  Activa en {mesImpacto}
+                                </span>
+                              ) : (
+                                <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:isPayer?"#F0FBF5":"#FFF5F5",color:isPayer?C.green:C.red}}>
+                                  {isPayer?`te deben ${fmt(item.montoOtro)}`:`debés ${fmt(item.montoOtro)}`}
+                                </span>
+                              )}
                             </div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
@@ -2901,7 +2914,8 @@ Reglas específicas de categorización:
                           </div>
                         </div>
                       );
-                    } else {
+                  };
+                  const renderPago = (item) => {
                       const isFromMe=item.de===myUid;
                       const fromName=isFromMe?"Yo":(partner?.displayName||"Otra persona");
                       const toName=!isFromMe?"Yo":(partner?.displayName||"Otra persona");
@@ -2930,10 +2944,20 @@ Reglas específicas de categorización:
                           </div>
                         </div>
                       );
-                    }
-                  })}
+                  };
+                  return (
+                <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                  {historiaActiva.map(item => item.tipo==="gasto" ? renderGasto(item,false) : renderPago(item))}
+                  {historiaPendiente.length>0 && <>
+                    <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginTop:6,marginBottom:2}}>
+                      Pendiente — activa cuando llegue el mes de impacto
+                    </div>
+                    {historiaPendiente.map(item => renderGasto(item,true))}
+                  </>}
                 </div>
-              )}
+                  );
+                })()}
+
               <button onClick={()=>setModalComp("cats")} style={{marginTop:14,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontFamily:sans,fontWeight:700,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 <Icon name="list" size={13} color={C.mid}/>Categorías compartidas
               </button>
