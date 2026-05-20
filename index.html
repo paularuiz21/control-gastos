@@ -807,13 +807,20 @@ Reglas específicas de categorización:
 
   const editarGasto = (g) => {
     setEditando(g.id);
-    const tarjetaId = tarjetas.find(t=>t.label===g.via)?.id||"";
+    const tarjetaId = tarjetas.find(t=>t.id===g.tarjeta||t.label===g.via)?.id||"";
     setForm({
-      fecha:g.fecha, gasto:g.gasto, observacion:g.observacion||"",
-      tipo_mov:g.tipo_mov, via:tarjetaId?g.via:g.via, tarjeta:tarjetaId,
-      monto_dividir:g.monto_dividir?String(g.monto_dividir):"",
-      monto:tarjetaId?"":(g.monto_dividir?"":String(g.monto)),
-      dividir:!!g.monto_dividir,
+      ...FORM_INIT,
+      fecha:        g.fecha,
+      gasto:        g.gasto,
+      observacion:  g.observacion||"",
+      tipo_mov:     g.tipo_mov||"Gasto",
+      via:          g.via,
+      tarjeta:      tarjetaId,
+      monto:        g.monto_dividir ? "" : String(g.monto_original||g.monto),
+      monto_dividir:g.monto_dividir ? String(g.monto_dividir) : "",
+      dividir:      !!g.monto_dividir,
+      moneda:       g.moneda||"ARS",
+      tcambio:      g.tcambio ? String(g.tcambio) : "",
     });
     setTab("cargar"); setModal(null);
   };
