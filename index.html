@@ -755,8 +755,9 @@ Reglas específicas de categorización:
     const montoARS = form.moneda==="USD" && form.tcambio
       ? montoBase * parseFloat(form.tcambio)
       : montoBase;
+    const nuevoId = editando||Date.now();
     const nuevo = {
-      id: editando||Date.now(),
+      id: nuevoId,
       fecha:form.fecha, fecha_impacto:imp,
       gasto:form.gasto, observacion:form.observacion,
       tipo_mov:form.tipo_mov, tipo:cat?.tipo||"",
@@ -777,7 +778,7 @@ Reglas específicas de categorización:
         const montoT   = parseFloat(form.monto_dividir)||0;
         const montoMio = montoFinal();
         const montoOtro = Math.round((montoT - montoMio) * 100) / 100;
-        const gcId = Date.now();
+        const gcId = nuevoId;
         // Marcar como sincronizado antes de escribir a Firestore (evita duplicado del auto-sync)
         gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, gcId];
         setGastosCompSynced(s=>[...s, gcId]);
@@ -828,9 +829,17 @@ Reglas específicas de categorización:
   const eliminarGasto = (id) => {
     const g = gastos.find(x=>x.id===id);
     let gcEntry = null, gcId = null;
-    if (typeof id==="string" && id.startsWith("gc_") && groupData) {
-      gcId    = Number(id.slice(3));
-      gcEntry = (groupData.gastosComp||[]).find(x=>x.id===gcId);
+    if (groupData) {
+      if (typeof id==="string" && id.startsWith("gc_")) {
+        // Gasto recibido del partner (auto-sync)
+        gcId    = Number(id.slice(3));
+        gcEntry = (groupData.gastosComp||[]).find(x=>x.id===gcId);
+      } else {
+        // Gasto propio compartido: el ID numérico coincide con el gastosComp
+        const numId = typeof id === "number" ? id : Number(id);
+        gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
+        if (gcEntry) gcId = numId;
+      }
     }
     // Guardar en buffer de undo
     if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
