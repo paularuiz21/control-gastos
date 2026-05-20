@@ -298,7 +298,7 @@ const impactoInfo = (fecha, tid, tarjetas) => {
 };
 
 const fmt = (n) =>
-  new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
+  new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",minimumFractionDigits:0,maximumFractionDigits:2}).format(n);
 const fmtUSD = (n) =>
   new Intl.NumberFormat("en-US",{style:"currency",currency:"USD",maximumFractionDigits:2}).format(n);
 
@@ -527,6 +527,7 @@ function App() {
     fecha:today(), gasto:cats[0]?.id||"", observacion:"",
     tipo_mov:"Gasto", via:"Débito", tarjeta:"",
     monto_dividir:"", monto:"", dividir:false,
+    divTipo:"mitad", divValor:"",
     moneda:"ARS", tcambio:"", sumar_balance:false,
   };
   const [form, setForm] = useState(FORM_INIT);
@@ -631,9 +632,26 @@ function App() {
   }, [authUser, isGuest, syncReady, pendingInvite, groupId]);
 
   const set = (k) => (e) => setForm({...form,[k]:e.target.value});
-  // Helpers para input de monto con separadores de miles
-  const fmtARS  = v => { if(!v) return ""; const n=parseInt(String(v).replace(/\D/g,""),10); return isNaN(n)?"":new Intl.NumberFormat("es-AR",{maximumFractionDigits:0}).format(n); };
-  const parseARS = v => String(v).replace(/\D/g,"");
+  // Helpers para input de monto con separadores de miles y decimales
+  const fmtARS = v => {
+    if (v === "" || v === null || v === undefined) return "";
+    const s = String(v);
+    const trailingDec = s.endsWith(".");   // usuario está escribiendo decimales
+    const n = parseFloat(s);
+    if (isNaN(n)) return "";
+    const out = new Intl.NumberFormat("es-AR", {maximumFractionDigits:2}).format(n);
+    return trailingDec ? out + "," : out;
+  };
+  const parseARS = v => {
+    const s = String(v);
+    if (s.includes(",")) {
+      const idx = s.lastIndexOf(",");
+      const intPart = s.slice(0, idx).replace(/\D/g,"");
+      const decPart = s.slice(idx+1).replace(/\D/g,"").slice(0,2);
+      return intPart + "." + decPart;
+    }
+    return s.replace(/\D/g,"");   // sin coma: solo dígitos
+  };
   const parseUSD = v => String(v).replace(/[^\d.]/g,"");
 
   // Always render cats in alphabetical order regardless of storage order
@@ -719,8 +737,11 @@ Reglas específicas de categorización:
   };
 
   const montoFinal = (f=form) => {
-    if (f.dividir && f.monto_dividir) return parseFloat(f.monto_dividir)/2;
-    return parseFloat(f.monto)||0;
+    if (!f.dividir) return parseFloat(f.monto)||0;
+    const total = parseFloat(f.monto_dividir)||0;
+    if (f.divTipo === "monto") return parseFloat(f.divValor)||0;
+    if (f.divTipo === "pct")   return Math.round(total * (parseFloat(f.divValor)||50) / 100 * 100) / 100;
+    return total / 2;
   };
 
   const guardar = () => {
@@ -753,7 +774,9 @@ Reglas específicas de categorización:
       setGastos(gs=>[nuevo,...gs]);
       // Sumar al balance compartido si está marcado
       if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
-        const montoT = parseFloat(form.monto_dividir)||0;
+        const montoT   = parseFloat(form.monto_dividir)||0;
+        const montoMio = montoFinal();
+        const montoOtro = Math.round((montoT - montoMio) * 100) / 100;
         const gcId = Date.now();
         // Marcar como sincronizado antes de escribir a Firestore (evita duplicado del auto-sync)
         gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, gcId];
@@ -765,10 +788,10 @@ Reglas específicas de categorización:
           observacion: form.observacion,
           monto: montoT,
           pagadoPor: authUser.uid,
-          montoOtro: montoT/2,
-          montoMio:  montoT/2,
-          splitType: "percent",
-          splitValue: 50,
+          montoOtro,
+          montoMio,
+          splitType: form.divTipo,
+          splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
           via: form.via,
           tarjeta: form.tarjeta||null,
         };
@@ -2039,9 +2062,29 @@ Reglas específicas de categorización:
               value={fmtARS(form.monto_dividir)}
               onChange={e=>setForm({...form,monto_dividir:parseARS(e.target.value)})}
               style={inp}/>
+            {/* Selector de tipo de división */}
+            <div style={{display:"flex",gap:5,marginTop:8}}>
+              {[["mitad","50/50"],["monto","$ fijo"],["pct","% mío"]].map(([v,l])=>(
+                <button key={v} onClick={()=>setForm({...form,divTipo:v,divValor:""})}
+                  style={{flex:1,padding:"6px 4px",borderRadius:7,cursor:"pointer",
+                  border:`1.5px solid ${form.divTipo===v?C.comp:C.rule}`,
+                  background:form.divTipo===v?"#F5F0FF":"transparent",
+                  color:form.divTipo===v?C.comp:C.mid,
+                  fontFamily:sans,fontWeight:700,fontSize:11}}>
+                  {l}
+                </button>
+              ))}
+            </div>
+            {form.divTipo !== "mitad" && (
+              <input type="text" inputMode="decimal"
+                placeholder={form.divTipo==="monto" ? "Mi parte $" : "Mi % (ej: 60)"}
+                value={form.divTipo==="monto" ? fmtARS(form.divValor) : form.divValor}
+                onChange={e=>setForm({...form,divValor:form.divTipo==="monto"?parseARS(e.target.value):parseUSD(e.target.value)})}
+                style={{...inp,marginTop:8}}/>
+            )}
             {form.monto_dividir && (
               <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
-                Tu parte: {fmt(parseFloat(form.monto_dividir)/2)}
+                Tu parte: {fmt(montoFinal())}
               </div>
             )}
             {groupId && (
