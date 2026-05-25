@@ -1552,7 +1552,17 @@ Reglas específicas de categorización:
         monto_dividir:null, monto:myShare,
         moneda:"ARS", monto_original:null, tcambio:null,
       };
-      setGastos(gs=>[gastoPersonal,...gs]);
+      if (editItem) {
+        // Actualizar el gasto personal existente (puede ser "gc_"+id o id numérico)
+        setGastos(gs=>{
+          const gcPrefixId = "gc_"+entryId;
+          const found = gs.some(g=>g.id===gcPrefixId||g.id===entryId);
+          if (found) return gs.map(g=>(g.id===gcPrefixId||g.id===entryId)?{...gastoPersonal,id:g.id}:g);
+          return [gastoPersonal,...gs]; // fallback si no existe todavía
+        });
+      } else {
+        setGastos(gs=>[gastoPersonal,...gs]);
+      }
       onClose();
     };
 
