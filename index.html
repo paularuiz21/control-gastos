@@ -528,7 +528,7 @@ function App() {
     tipo_mov:"Gasto", via:"Débito", tarjeta:"",
     monto_dividir:"", monto:"", dividir:false,
     divTipo:"mitad", divValor:"",
-    moneda:"ARS", tcambio:"", sumar_balance:false,
+    moneda:"ARS", tcambio:"", sumar_balance:false, quienPago:"yo",
   };
   const [form, setForm] = useState(FORM_INIT);
 
@@ -775,31 +775,42 @@ Reglas específicas de categorización:
       setGastos(gs=>[nuevo,...gs]);
       // Sumar al balance compartido si está marcado
       if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
-        const montoT   = parseFloat(form.monto_dividir)||0;
-        const montoMio = montoFinal();
-        const montoOtro = Math.round((montoT - montoMio) * 100) / 100;
+        const montoT    = parseFloat(form.monto_dividir)||0;
+        const otraPago  = form.quienPago === "otra";
+        const partner   = (groupData?.members||[]).find(m=>m.uid!==authUser.uid);
+        // Si pagó otra persona: montoMio=su parte (lo q el partner pagó), montoOtro=mi parte (lo q yo debo)
+        const miParte   = montoFinal();
+        const suParte   = Math.round((montoT - miParte) * 100) / 100;
+        const montoMio  = otraPago ? suParte  : miParte;
+        const montoOtro = otraPago ? miParte  : suParte;
         const gcId = nuevoId;
-        // Marcar como sincronizado antes de escribir a Firestore (evita duplicado del auto-sync)
         gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, gcId];
         setGastosCompSynced(s=>[...s, gcId]);
         const gastoComp = {
           id: gcId,
           fecha: form.fecha,
-          fecha_impacto: fechaImpacto(form.fecha, form.tarjeta||null, tarjetas),
+          fecha_impacto: otraPago ? form.fecha : fechaImpacto(form.fecha, form.tarjeta||null, tarjetas),
           catId: form.gasto,
           observacion: form.observacion,
           monto: montoT,
-          pagadoPor: authUser.uid,
+          pagadoPor: otraPago ? (partner?.uid||"") : authUser.uid,
           montoOtro,
           montoMio,
           splitType: form.divTipo,
           splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
-          via: form.via,
-          tarjeta: form.tarjeta||null,
+          via: otraPago ? "Otra persona" : form.via,
+          tarjeta: otraPago ? null : (form.tarjeta||null),
         };
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
         });
+        // Si pagó otra persona, corregir también el gasto personal (via = Otra persona, sin tarjeta)
+        if (otraPago) {
+          setGastos(gs => gs.map(g => g.id===nuevoId
+            ? {...g, via:"Otra persona", tarjeta:null, monto:montoOtro}
+            : g
+          ));
+        }
       }
     }
     setForm(FORM_INIT);
@@ -2117,13 +2128,29 @@ Reglas específicas de categorización:
               </div>
             )}
             {groupId && (
-              <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",marginTop:10,fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
-                <input type="checkbox" checked={form.sumar_balance||false}
-                  onChange={e=>setForm({...form,sumar_balance:e.target.checked})}
-                  style={{accentColor:C.blue}}/>
-                <Icon name="users" size={13} color={C.blue}/>
-                Sumar al balance compartido
-              </label>
+              <div style={{marginTop:10}}>
+                <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
+                  <input type="checkbox" checked={form.sumar_balance||false}
+                    onChange={e=>setForm({...form,sumar_balance:e.target.checked,quienPago:"yo"})}
+                    style={{accentColor:C.blue}}/>
+                  <Icon name="users" size={13} color={C.blue}/>
+                  Sumar al balance compartido
+                </label>
+                {form.sumar_balance && (
+                  <div style={{display:"flex",gap:5,marginTop:8}}>
+                    {[["yo","Yo pagué"],["otra","Otra persona pagó"]].map(([v,l])=>(
+                      <button key={v} onClick={()=>setForm({...form,quienPago:v})}
+                        style={{flex:1,padding:"7px 4px",borderRadius:7,cursor:"pointer",
+                        border:`1.5px solid ${form.quienPago===v?C.blue:C.rule}`,
+                        background:form.quienPago===v?"#EEF3FF":"transparent",
+                        color:form.quienPago===v?C.blue:C.mid,
+                        fontFamily:sans,fontWeight:700,fontSize:11}}>
+                        {l}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         ) : (
