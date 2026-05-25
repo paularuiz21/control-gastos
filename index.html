@@ -2993,32 +2993,9 @@ Reglas específicas de categorización:
                               )}
                             </div>
                           </div>
-                          <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(item.monto)}</div>
-                              <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              <button onClick={()=>{
-                                // El gasto personal puede tener prefijo "gc_" (registrado por partner)
-                                // o ID numérico igual (registrado por mí con "dividir gasto")
-                                const personalIdGc  = "gc_"+item.id;
-                                const personalG = gastos.find(g=>g.id===personalIdGc)
-                                               || gastos.find(g=>g.id===item.id);
-                                if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-                                if (personalG) {
-                                  setUndoData({gasto:personalG, gcEntry:item, gcId:item.id});
-                                  undoTimerRef.current = setTimeout(()=>setUndoData(null), 5000);
-                                }
-                                const newG=gastosComp.filter(g=>g.id!==item.id);
-                                fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
-                                setGastos(gs=>gs.filter(g=>g.id!==personalIdGc && g.id!==item.id));
-                                gastosCompSyncedRef.current = gastosCompSyncedRef.current.filter(x=>x!==item.id);
-                                setGastosCompSynced(s=>s.filter(x=>x!==item.id));
-                              }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
-                                <Icon name="trash" size={13} color={C.mid}/>
-                              </button>
-                            </div>
+                          <div style={{textAlign:"right",flexShrink:0}}>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(item.monto)}</div>
+                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
                           </div>
                         </div>
                       );
