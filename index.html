@@ -2961,8 +2961,11 @@ Reglas específicas de categorización:
                                 <Icon name="edit" size={13} color={C.mid}/>
                               </button>
                               <button onClick={()=>{
-                                const personalId = "gc_"+item.id;
-                                const personalG  = gastos.find(g=>g.id===personalId);
+                                // El gasto personal puede tener prefijo "gc_" (registrado por partner)
+                                // o ID numérico igual (registrado por mí con "dividir gasto")
+                                const personalIdGc  = "gc_"+item.id;
+                                const personalG = gastos.find(g=>g.id===personalIdGc)
+                                               || gastos.find(g=>g.id===item.id);
                                 if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
                                 if (personalG) {
                                   setUndoData({gasto:personalG, gcEntry:item, gcId:item.id});
@@ -2970,7 +2973,7 @@ Reglas específicas de categorización:
                                 }
                                 const newG=gastosComp.filter(g=>g.id!==item.id);
                                 fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
-                                setGastos(gs=>gs.filter(g=>g.id!==personalId));
+                                setGastos(gs=>gs.filter(g=>g.id!==personalIdGc && g.id!==item.id));
                                 gastosCompSyncedRef.current = gastosCompSyncedRef.current.filter(x=>x!==item.id);
                                 setGastosCompSynced(s=>s.filter(x=>x!==item.id));
                               }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
