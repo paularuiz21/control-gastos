@@ -600,7 +600,7 @@ function App() {
     const newGastos = unsynced.map(g => {
       const isMyEntry = g.pagadoPor === myUid;
       const myShare   = isMyEntry ? g.montoMio : g.montoOtro;
-      const viaFinal  = isMyEntry ? (g.via || "Efectivo") : "Otra persona";
+      const viaFinal  = isMyEntry ? (g.via || "Efectivo") : "Balance";
       const fi        = (isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha;
       const catLabel  = catsComp.find(c=>c.id===g.catId)?.label?.toLowerCase()||"";
       const baseId    = (g.catId||"").replace(/^comp_/,"");
@@ -798,7 +798,7 @@ Reglas específicas de categorización:
           montoMio,
           splitType: form.divTipo,
           splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
-          via: otraPago ? "Otra persona" : form.via,
+          via: otraPago ? "Balance" : form.via,
           tarjeta: otraPago ? null : (form.tarjeta||null),
         };
         fbDb.collection("groups").doc(groupId).update({
@@ -807,7 +807,7 @@ Reglas específicas de categorización:
         // Si pagó otra persona, corregir también el gasto personal (via = Otra persona, sin tarjeta)
         if (otraPago) {
           setGastos(gs => gs.map(g => g.id===nuevoId
-            ? {...g, via:"Otra persona", tarjeta:null, monto:montoOtro}
+            ? {...g, via:"Balance", tarjeta:null, monto:montoOtro}
             : g
           ));
         }
@@ -1498,7 +1498,7 @@ Reglas específicas de categorización:
       const entryId  = editItem?.id || Date.now();
       const myShare  = isPayer ? montoMio : montoOtro; // mi porción real
       const viaFinal = !isPayer
-        ? "Otra persona"
+        ? "Balance"
         : (fg.tarjeta ? (tarjetas.find(t=>t.id===fg.tarjeta)?.label||"Crédito") : fg.via);
       const fi = (isPayer && fg.tarjeta) ? fechaImpacto(fg.fecha, fg.tarjeta, tarjetas) : fg.fecha;
 
@@ -1647,7 +1647,7 @@ Reglas específicas de categorización:
         ) : (
           <div style={{marginBottom:14,padding:"9px 13px",borderRadius:9,background:C.tagComp,display:"flex",alignItems:"center",gap:8}}>
             <Icon name="users" size={13} color={C.comp}/>
-            <span style={{fontFamily:sans,fontSize:12,fontWeight:600,color:C.comp}}>Vía de pago: Otra persona</span>
+            <span style={{fontFamily:sans,fontSize:12,fontWeight:600,color:C.comp}}>Vía de pago: Balance compartido</span>
           </div>
         )}
         <div style={{...card,marginBottom:14}}>
