@@ -770,6 +770,38 @@ Reglas específicas de categorización:
     };
     if (editando) {
       setGastos(gs=>gs.map(g=>g.id===editando?nuevo:g));
+      // Si el gasto era compartido, sincronizar cambios en gastosComp de Firestore
+      if (form.dividir && groupId && authUser && fbDb && groupData) {
+        const numId = typeof editando === "string" && editando.startsWith("gc_")
+          ? Number(editando.slice(3))
+          : editando;
+        const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
+        if (gcEntry) {
+          const otraPago  = form.quienPago === "otra";
+          const partner   = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
+          const montoT    = parseFloat(form.monto_dividir)||0;
+          const miParte   = montoFinal();
+          const suParte   = Math.round((montoT - miParte)*100)/100;
+          const montoMio  = otraPago ? suParte  : miParte;
+          const montoOtro = otraPago ? miParte  : suParte;
+          const updatedGC = {
+            ...gcEntry,
+            fecha: form.fecha,
+            fecha_impacto: otraPago ? form.fecha : imp,
+            catId: form.gasto,
+            observacion: form.observacion,
+            monto: montoT,
+            pagadoPor: otraPago ? (partner?.uid||"") : authUser.uid,
+            montoMio, montoOtro,
+            splitType: form.divTipo,
+            splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
+            via: otraPago ? "Balance" : form.via,
+            tarjeta: otraPago ? null : (form.tarjeta||null),
+          };
+          const newGC = (groupData.gastosComp||[]).map(g=>g.id===numId?updatedGC:g);
+          fbDb.collection("groups").doc(groupId).update({gastosComp:newGC});
+        }
+      }
       setEditando(null); setModal(null);
     } else {
       setGastos(gs=>[nuevo,...gs]);
@@ -2967,9 +2999,6 @@ Reglas específicas de categorización:
                               <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              <button onClick={()=>setEditGC(item)} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
-                                <Icon name="edit" size={13} color={C.mid}/>
-                              </button>
                               <button onClick={()=>{
                                 // El gasto personal puede tener prefijo "gc_" (registrado por partner)
                                 // o ID numérico igual (registrado por mí con "dividir gasto")
@@ -3043,7 +3072,6 @@ Reglas específicas de categorización:
               <button onClick={leaveGroup} style={{marginTop:8,width:"100%",padding:"10px",borderRadius:9,border:`1.5px solid ${C.rule}`,background:"none",color:C.mid,fontFamily:sans,fontWeight:600,fontSize:12,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:6}}>
                 <Icon name="x" size={12} color={C.mid}/>Salir del grupo
               </button>
-              {editGC && <ModalGastoComp onClose={()=>setEditGC(null)} editItem={editGC}/>}
               {modalComp==="pago"  && <ModalPagoComp  onClose={()=>setModalComp(null)}/>}
               {modalComp==="cats"  && <ModalCatsComp  onClose={()=>setModalComp(null)}/>}
             </div>
