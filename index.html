@@ -613,7 +613,7 @@ function App() {
         fecha: g.fecha, fecha_impacto: fi,
         gasto: catMatch?.id,
         observacion: g.observacion||"",
-        tipo_mov:"gasto", tipo:catMatch?.tipo||"Discrecional",
+        tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
         via: viaFinal, tarjeta:(isMyEntry&&g.tarjeta)?g.tarjeta:null,
         monto_dividir:null, monto:myShare,
         moneda:"ARS", monto_original:null, tcambio:null,
@@ -820,6 +820,17 @@ Reglas específicas de categorización:
   const editarGasto = (g) => {
     setEditando(g.id);
     const tarjetaId = tarjetas.find(t=>t.id===g.tarjeta||t.label===g.via)?.id||"";
+    // Intentar recuperar tipo de división y quién pagó desde la entrada gastosComp
+    let divTipo = "mitad", divValor = "", quienPago = "yo";
+    if (groupData && g.monto_dividir) {
+      const numId = typeof g.id === "string" ? Number(g.id.replace("gc_","")) : g.id;
+      const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
+      if (gcEntry) {
+        divTipo  = gcEntry.splitType || "mitad";
+        divValor = divTipo !== "mitad" ? String(gcEntry.splitValue||"") : "";
+        quienPago = gcEntry.pagadoPor === authUser?.uid ? "yo" : "otra";
+      }
+    }
     setForm({
       ...FORM_INIT,
       fecha:        g.fecha,
@@ -831,6 +842,9 @@ Reglas específicas de categorización:
       monto:        g.monto_dividir ? "" : String(g.monto_original||g.monto),
       monto_dividir:g.monto_dividir ? String(g.monto_dividir) : "",
       dividir:      !!g.monto_dividir,
+      divTipo,
+      divValor,
+      quienPago,
       moneda:       g.moneda||"ARS",
       tcambio:      g.tcambio ? String(g.tcambio) : "",
     });
@@ -845,8 +859,10 @@ Reglas específicas de categorización:
         // Gasto recibido del partner (auto-sync)
         gcId    = Number(id.slice(3));
         gcEntry = (groupData.gastosComp||[]).find(x=>x.id===gcId);
-      } else {
+      } else if (g?.monto_dividir) {
         // Gasto propio compartido: el ID numérico coincide con el gastosComp
+        // Solo buscamos si el gasto era compartido (tiene monto_dividir), para
+        // evitar colisiones accidentales con gastos personales cuyo ID coincida.
         const numId = typeof id === "number" ? id : Number(id);
         gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
         if (gcEntry) gcId = numId;
@@ -889,21 +905,16 @@ Reglas específicas de categorización:
     if (!myUid) return 0;
     const hoy = new Date().toISOString().split("T")[0];
     let b = 0;
-    console.log("=== calcBalance ===", "hoy:", hoy);
     (gastosComp||[]).forEach(g => {
       const fi = fiComp(g);
-      const activo = fi <= hoy;
-      console.log("  gasto id:", g.id, "fecha:", g.fecha, "tarjeta:", g.tarjeta, "fecha_impacto:", g.fecha_impacto, "fiComp:", fi, "activo:", activo, "montoOtro:", g.montoOtro);
-      if (activo) {
+      if (fi <= hoy) {
         const mo = g.montoOtro || 0;
         if (g.pagadoPor === myUid) b += mo; else b -= mo;
       }
     });
     (pagos||[]).forEach(p => {
-      console.log("  pago:", p);
       if (p.de === myUid) b += p.monto; else b -= p.monto;
     });
-    console.log("  resultado:", b);
     return b;
   };
 
@@ -1536,7 +1547,7 @@ Reglas específicas de categorización:
         fecha: fg.fecha, fecha_impacto: fi,
         gasto: catMatch?.id,
         observacion: fg.observacion || getCatComp(fg.catId).label,
-        tipo_mov:"gasto", tipo:catMatch?.tipo||"Discrecional",
+        tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
         via: viaFinal, tarjeta:(isPayer&&fg.tarjeta)?fg.tarjeta:null,
         monto_dividir:null, monto:myShare,
         moneda:"ARS", monto_original:null, tcambio:null,
