@@ -593,11 +593,14 @@ function App() {
   /* ── AUTO-SYNC: gastos del grupo → movimientos personales ── */
   useEffect(() => {
     if (!groupData || !authUser || !cats.length) return;
-    const myUid   = authUser.uid;
-    const catsComp = groupData.catsComp || CATS_COMP_DEFAULT;
-    const unsynced = (groupData.gastosComp||[]).filter(g => !gastosCompSyncedRef.current.includes(g.id));
-    if (!unsynced.length) return;
-    const newGastos = unsynced.map(g => {
+    const myUid     = authUser.uid;
+    const catsComp  = groupData.catsComp || CATS_COMP_DEFAULT;
+    const allGC     = groupData.gastosComp || [];
+    const currentGCIds  = new Set(allGC.map(g => g.id));
+    const currentSynced = gastosCompSyncedRef.current;
+
+    // Helper: reconstruye los campos del gasto personal desde una entrada gastosComp
+    const buildFields = (g) => {
       const isMyEntry = g.pagadoPor === myUid;
       const myShare   = isMyEntry ? g.montoMio : g.montoOtro;
       const viaFinal  = isMyEntry ? (g.via || "Efectivo") : "Balance";
@@ -609,20 +612,64 @@ function App() {
         || cats.find(c=>c.id==="extraordinarios")
         || cats[0];
       return {
-        id: "gc_"+g.id,
         fecha: g.fecha, fecha_impacto: fi,
-        gasto: catMatch?.id,
-        observacion: g.observacion||"",
+        gasto: catMatch?.id, observacion: g.observacion||"",
         tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
         via: viaFinal, tarjeta:(isMyEntry&&g.tarjeta)?g.tarjeta:null,
         monto_dividir:null, monto:myShare,
         moneda:"ARS", monto_original:null, tcambio:null,
       };
+    };
+
+    // 1. IDs eliminados de Firestore (estaban sincronizados pero ya no existen)
+    const deletedIds = new Set(currentSynced.filter(id => !currentGCIds.has(id)));
+
+    // 2. Entradas nuevas (nunca sincronizadas)
+    const unsynced = allGC.filter(g => !currentSynced.includes(g.id));
+
+    // 3. Entradas ya sincronizadas que pueden haber cambiado
+    const syncedEntries = allGC.filter(g => currentSynced.includes(g.id));
+    const updatesMap    = new Map(syncedEntries.map(g => [g.id, buildFields(g)]));
+
+    if (!deletedIds.size && !unsynced.length && !updatesMap.size) return;
+
+    setGastos(gs => {
+      // Quitar gastos cuya entrada fue eliminada de Firestore
+      let result = gs.filter(g => {
+        const numId = typeof g.id === "string" && g.id.startsWith("gc_")
+          ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
+        return !deletedIds.has(numId);
+      });
+      // Actualizar gastos existentes con datos de Firestore
+      result = result.map(g => {
+        const isGC  = typeof g.id === "string" && g.id.startsWith("gc_");
+        const numId = isGC ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
+        if (numId && updatesMap.has(numId)) {
+          const f = updatesMap.get(numId);
+          if (isGC) {
+            // Gasto auto-sincronizado: reemplazar completamente
+            return {...f, id: g.id};
+          } else {
+            // Gasto propio (registrado por mí): solo actualizar campos que vienen del balance
+            // (preservar monto_dividir, moneda, tcambio, via/tarjeta originales)
+            return {...g, fecha:f.fecha, fecha_impacto:f.fecha_impacto,
+              observacion:f.observacion, gasto:f.gasto, monto:f.monto};
+          }
+        }
+        return g;
+      });
+      // Agregar gastos de entradas nuevas
+      const newPersonal = unsynced.map(g => ({...buildFields(g), id:"gc_"+g.id}));
+      return [...newPersonal, ...result];
     });
-    const newIds = unsynced.map(g=>g.id);
-    gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, ...newIds];
-    setGastosCompSynced(s=>[...s,...newIds]);
-    setGastos(gs=>[...newGastos,...gs]);
+
+    // Actualizar lista de sincronizados
+    if (deletedIds.size || unsynced.length) {
+      const newIds       = unsynced.map(g => g.id);
+      const updatedSynced = [...currentSynced.filter(id => !deletedIds.has(id)), ...newIds];
+      gastosCompSyncedRef.current = updatedSynced;
+      setGastosCompSynced(s => [...new Set([...s.filter(id=>!deletedIds.has(id)), ...newIds])]);
+    }
   }, [groupData]);
 
   /* ── Mostrar prompt de invitación si hay token en la URL ── */
