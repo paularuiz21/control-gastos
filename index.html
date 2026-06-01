@@ -3010,7 +3010,19 @@ Reglas específicas de categorización:
           return (
             <div>
               <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.comp}`,background:C.tagComp}}>
-                <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.comp,marginBottom:8}}>Balance actual</div>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.comp}}>Balance actual</div>
+                  {partner && (
+                    <div style={{display:"flex",alignItems:"center",gap:5}}>
+                      <div style={{width:20,height:20,borderRadius:"50%",background:C.comp,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                        <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#fff"}}>
+                          {(partner.displayName||"?")[0].toUpperCase()}
+                        </span>
+                      </div>
+                      <span style={{fontFamily:sans,fontSize:11,fontWeight:600,color:C.comp}}>{partner.displayName||partner.email||"Otra persona"}</span>
+                    </div>
+                  )}
+                </div>
                 {balance===0 ? (
                   <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>¡Están al día!</div>
                 ) : balance>0 ? (
