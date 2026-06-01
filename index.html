@@ -65,7 +65,8 @@ const fsLoad = async (uid) => {
 
 const fsSave = debounce(async (uid, data) => {
   if (!fbDb) return;
-  try { await fbDb.collection("users").doc(uid).set(data); }
+  // merge:true para no sobreescribir campos no incluidos (ej: groupId si es null por error de carga)
+  try { await fbDb.collection("users").doc(uid).set(data, {merge: true}); }
   catch(e) { console.warn("fsSave error:", e); }
 }, 1500);
 
@@ -509,7 +510,8 @@ function App() {
   });
   const [showJoinPrompt,    setShowJoinPrompt]    = useState(false);
   const [gastosCompSynced,  setGastosCompSynced]  = useState([]);
-  const gastosCompSyncedRef = React.useRef([]);
+  const gastosCompSyncedRef  = React.useRef([]);
+  const prevGCFingerprintRef = React.useRef("");
   useEffect(() => { gastosCompSyncedRef.current = gastosCompSynced; }, [gastosCompSynced]);
   const [undoData,   setUndoData]   = useState(null); // {gasto, gcEntry?, gcId?}
   const undoTimerRef = React.useRef(null);
@@ -576,7 +578,10 @@ function App() {
   /* ── FIREBASE: guardar en Firestore cuando cambia cualquier estado ── */
   useEffect(() => {
     if (!authUser || isGuest || !syncReady) return;
-    fsSave(authUser.uid, { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro, groupId, gastosCompSynced });
+    // groupId solo se incluye si está seteado: evita que un error de carga lo borre en Firestore
+    const dataToSave = { gastos, cats, catsIngreso, catsAhorro, tarjetas, presup, presupComp, objAhorro, gastosCompSynced };
+    if (groupId) dataToSave.groupId = groupId;
+    fsSave(authUser.uid, dataToSave);
   }, [gastos, cats, tarjetas, presup, presupComp, objAhorro, groupId, gastosCompSynced, syncReady]);
 
   /* ── FIREBASE: escuchar grupo en tiempo real ── */
@@ -631,7 +636,12 @@ function App() {
     const syncedEntries = allGC.filter(g => currentSynced.includes(g.id));
     const updatesMap    = new Map(syncedEntries.map(g => [g.id, buildFields(g)]));
 
-    if (!deletedIds.size && !unsynced.length && !updatesMap.size) return;
+    // Fingerprint para detectar si los datos realmente cambiaron (evita setGastos en cada snapshot)
+    const gcFingerprint = allGC.map(g=>`${g.id}:${g.fecha}:${g.monto}:${g.observacion||""}`).join("|");
+    const gcChanged     = gcFingerprint !== prevGCFingerprintRef.current;
+    prevGCFingerprintRef.current = gcFingerprint;
+
+    if (!deletedIds.size && !unsynced.length && !gcChanged) return;
 
     setGastos(gs => {
       // Quitar gastos cuya entrada fue eliminada de Firestore
@@ -2927,10 +2937,13 @@ Reglas específicas de categorización:
                 const newMembers = (groupData?.members||[]).filter(m=>m.uid!==authUser?.uid);
                 const newUids    = (groupData?.memberUids||[]).filter(id=>id!==authUser?.uid);
                 await fbDb.collection("groups").doc(groupId).update({members:newMembers, memberUids:newUids});
+                // Borrar groupId explícitamente del doc del usuario (fsSave omite null)
+                await fbDb.collection("users").doc(authUser.uid).update({
+                  groupId: firebase.firestore.FieldValue.delete()
+                });
               }
             } catch(e) { console.warn("leaveGroup error:", e); }
             setGroupId(null); setGroupData(null); setGroupReady(false);
-            fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:null});
           };
 
           const gastosComp = groupData?.gastosComp||[];
