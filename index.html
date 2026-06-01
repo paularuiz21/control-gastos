@@ -512,6 +512,7 @@ function App() {
   const [gastosCompSynced,  setGastosCompSynced]  = useState([]);
   const gastosCompSyncedRef  = React.useRef([]);
   const prevGCFingerprintRef = React.useRef("");
+  const prevGCIdsRef         = React.useRef(new Set()); // IDs vistos en el último snapshot válido
   useEffect(() => { gastosCompSyncedRef.current = gastosCompSynced; }, [gastosCompSynced]);
   const [undoData,   setUndoData]   = useState(null); // {gasto, gcEntry?, gcId?}
   const undoTimerRef = React.useRef(null);
@@ -626,8 +627,19 @@ function App() {
       };
     };
 
-    // 1. IDs eliminados de Firestore (estaban sincronizados pero ya no existen)
-    const deletedIds = new Set(currentSynced.filter(id => !currentGCIds.has(id)));
+    // 1. IDs eliminados de Firestore
+    // Solo marcamos como eliminado un ID si:
+    //   a) estaba sincronizado Y
+    //   b) apareció en un snapshot anterior (prevGCIdsRef) Y
+    //   c) ya no está en el snapshot actual
+    // Esto evita borrados falsos cuando Firestore devuelve temporalmente gastosComp vacío
+    const deletedIds = new Set(
+      currentSynced.filter(id => prevGCIdsRef.current.has(id) && !currentGCIds.has(id))
+    );
+    // Actualizar los IDs vistos (solo si el snapshot tiene datos o nunca tuvimos datos)
+    if (allGC.length > 0 || prevGCIdsRef.current.size === 0) {
+      prevGCIdsRef.current = currentGCIds;
+    }
 
     // 2. Entradas nuevas (nunca sincronizadas)
     const unsynced = allGC.filter(g => !currentSynced.includes(g.id));
