@@ -2710,9 +2710,10 @@ Reglas específicas de categorización:
                   {porCat.map(({id,label,tipo,icon,total,count})=>{
                     const pct=Math.round((total/totalG)*100);
                     const isI=tipo==="Indispensable";
-                    const presupCat=presupMes[id]||0;
+                    // Presupuesto efectivo = personal + mitad del compartido (para no cargar dos veces)
+                    const presupCat=(presupMes[id]||0) + Math.round((presupCompMes[id]||0)/2);
                     const difCat=total-presupCat;
-                    const over=presupCat===0||difCat>0; // sin presupuesto = excedido
+                    const over=presupCat===0||difCat>0;
                     const barW=presupCat>0?Math.min((total/presupCat)*100,100):100;
                     const barCol=over?C.red:C.green;
                     return (
@@ -2730,7 +2731,7 @@ Reglas específicas de categorización:
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
                           <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
                             {count} registro{count!==1?"s":""}
-                            {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmt(presupCat)}</span>}
+                            {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmt(presupCat)}{(presupCompMes[id]||0)>0&&(presupMes[id]||0)===0&&<span style={{color:C.comp}}> (compartido)</span>}</span>}
                           </span>
                           {presupCat>0
                             ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmt(difCat)}</span>
