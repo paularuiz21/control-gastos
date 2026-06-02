@@ -558,7 +558,11 @@ function App() {
     setSyncReady(false);
     fsLoad(authUser.uid).then(data => {
       if (data) {
-        if (Array.isArray(data.gastos))                          setGastos(data.gastos);
+        if (Array.isArray(data.gastos)) {
+          // Deduplicar por ID al cargar (puede haber duplicados por re-sync tras recuperación)
+          const seen = new Set();
+          setGastos(data.gastos.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; }));
+        }
         if (Array.isArray(data.cats) && data.cats.length > 0)   setCats(data.cats);
         if (Array.isArray(data.catsIngreso))                     setCatsIngreso(data.catsIngreso);
         if (Array.isArray(data.catsAhorro))                      setCatsAhorro(data.catsAhorro);
@@ -680,8 +684,11 @@ function App() {
         }
         return g;
       });
-      // Agregar gastos de entradas nuevas
-      const newPersonal = unsynced.map(g => ({...buildFields(g), id:"gc_"+g.id}));
+      // Agregar gastos de entradas nuevas (sin duplicar IDs que ya existen)
+      const existingIds = new Set(result.map(g => g.id));
+      const newPersonal = unsynced
+        .map(g => ({...buildFields(g), id:"gc_"+g.id}))
+        .filter(g => !existingIds.has(g.id));
       return [...newPersonal, ...result];
     });
 
