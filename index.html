@@ -855,8 +855,9 @@ Reglas específicas de categorización:
         if (gcEntry) {
           const otraPago  = form.quienPago === "otra";
           const partner   = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
-          const montoT    = parseFloat(form.monto_dividir)||0;
-          const miParte   = montoFinal();
+          const tc        = form.moneda==="USD" && form.tcambio ? parseFloat(form.tcambio) : 1;
+          const montoT    = Math.round((parseFloat(form.monto_dividir)||0) * tc * 100) / 100;
+          const miParte   = Math.round(montoFinal() * tc * 100) / 100;
           const suParte   = Math.round((montoT - miParte)*100)/100;
           const montoMio  = otraPago ? suParte  : miParte;
           const montoOtro = otraPago ? miParte  : suParte;
@@ -883,11 +884,13 @@ Reglas específicas de categorización:
       setGastos(gs=>[nuevo,...gs]);
       // Sumar al balance compartido si está marcado
       if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
-        const montoT    = parseFloat(form.monto_dividir)||0;
+        // Aplicar tipo de cambio si el gasto es en USD
+        const tc        = form.moneda==="USD" && form.tcambio ? parseFloat(form.tcambio) : 1;
+        const montoT    = Math.round((parseFloat(form.monto_dividir)||0) * tc * 100) / 100;
         const otraPago  = form.quienPago === "otra";
         const partner   = (groupData?.members||[]).find(m=>m.uid!==authUser.uid);
         // Si pagó otra persona: montoMio=su parte (lo q el partner pagó), montoOtro=mi parte (lo q yo debo)
-        const miParte   = montoFinal();
+        const miParte   = Math.round(montoFinal() * tc * 100) / 100;
         const suParte   = Math.round((montoT - miParte) * 100) / 100;
         const montoMio  = otraPago ? suParte  : miParte;
         const montoOtro = otraPago ? miParte  : suParte;
