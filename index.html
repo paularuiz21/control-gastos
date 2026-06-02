@@ -1081,6 +1081,40 @@ Reglas específicas de categorización:
     a.download=`gastos_${MESES[filtroMes]}_2026.csv`; a.click();
   };
 
+  const exportarBackupCSV = () => {
+    const h="Fecha,Impacto,Gasto,Observación,Tipo mov,Tipo,Via,Tarjeta,Monto dividir,Monto,Moneda";
+    const sorted = [...gastos].sort((a,b)=>(a.fecha_impacto||a.fecha).localeCompare(b.fecha_impacto||b.fecha));
+    const r = sorted.map(g => {
+      const cat = cats.find(c=>c.id===g.gasto);
+      const tarj = tarjetas.find(t=>t.id===g.tarjeta);
+      return `${g.fecha},${g.fecha_impacto||""},"${cat?.label||g.gasto}","${g.observacion||""}",${g.tipo_mov||""},${g.tipo||""},"${g.via||""}","${tarj?.label||""}",${g.monto_dividir||""},${g.monto},${g.moneda||"ARS"}`;
+    });
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([[h,...r].join("\n")],{type:"text/csv;charset=utf-8;"}));
+    a.download=`backup_gastos_${new Date().toISOString().split("T")[0]}.csv`; a.click();
+  };
+
+  const exportarBackupJSON = () => {
+    const data = {
+      exportado: new Date().toISOString(),
+      gastos,
+      cats, catsIngreso, catsAhorro,
+      tarjetas,
+      presup, presupComp,
+      objAhorro,
+      ...(groupData ? {
+        balanceCompartido: {
+          gastosComp: groupData.gastosComp||[],
+          pagos:      groupData.pagos||[],
+          members:    groupData.members||[],
+        }
+      } : {})
+    };
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
+    a.download=`backup_completo_${new Date().toISOString().split("T")[0]}.json`; a.click();
+  };
+
   /* ── STYLES ── */
   const inp = {width:"100%",padding:"10px 13px",borderRadius:8,border:`1.5px solid ${C.rule}`,background:C.paper,color:C.ink,fontSize:14,outline:"none",boxSizing:"border-box",fontFamily:sansR};
   const lbl = {display:"block",fontFamily:sans,fontWeight:700,fontSize:10,letterSpacing:"0.15em",textTransform:"uppercase",color:C.mid,marginBottom:7};
@@ -3283,6 +3317,28 @@ Reglas específicas de categorización:
                 </div>
               </button>
             ))}
+
+            {/* ── BACKUP ── */}
+            <div style={{marginTop:8,padding:"12px 14px",background:C.tagD,borderRadius:10,border:`1px solid ${C.rule}`}}>
+              <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:10}}>Copia de seguridad</div>
+              <div style={{display:"flex",flexDirection:"column",gap:7}}>
+                <button onClick={exportarBackupCSV} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 13px",background:C.paper,borderRadius:8,border:`1px solid ${C.rule}`,cursor:"pointer"}}>
+                  <Icon name="download" size={15} color={C.green}/>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>Exportar CSV</div>
+                    <div style={{fontFamily:sans,fontSize:11,color:C.mid}}>Todos los movimientos en Excel</div>
+                  </div>
+                </button>
+                <button onClick={exportarBackupJSON} style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 13px",background:C.paper,borderRadius:8,border:`1px solid ${C.rule}`,cursor:"pointer"}}>
+                  <Icon name="download" size={15} color={C.blue}/>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>Backup completo (JSON)</div>
+                    <div style={{fontFamily:sans,fontSize:11,color:C.mid}}>Gastos + categorías + presupuestos + balance</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
