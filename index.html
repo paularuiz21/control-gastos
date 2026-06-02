@@ -2712,8 +2712,8 @@ Reglas específicas de categorización:
                     const isI=tipo==="Indispensable";
                     const presupCat=presupMes[id]||0;
                     const difCat=total-presupCat;
-                    const over=presupCat>0&&difCat>0;
-                    const barW=presupCat>0?Math.min((total/presupCat)*100,100):0;
+                    const over=presupCat===0||difCat>0; // sin presupuesto = excedido
+                    const barW=presupCat>0?Math.min((total/presupCat)*100,100):100;
                     const barCol=over?C.red:C.green;
                     return (
                       <div key={id} style={{...card}}>
@@ -2724,11 +2724,9 @@ Reglas específicas de categorización:
                           <span style={{flex:1,fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{label}</span>
                           <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:C.red}}>{fmt(total)}</span>
                         </div>
-                        {presupCat>0 && (
-                          <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
-                            <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
-                          </div>
-                        )}
+                        <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
+                          <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
+                        </div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
                           <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
                             {count} registro{count!==1?"s":""}
@@ -2736,7 +2734,7 @@ Reglas específicas de categorización:
                           </span>
                           {presupCat>0
                             ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmt(difCat)}</span>
-                            :<span style={{fontFamily:sans,fontSize:10,color:C.mid,fontWeight:700}}>{pct}%</span>
+                            :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
                           }
                         </div>
                       </div>
