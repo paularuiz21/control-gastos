@@ -1043,9 +1043,20 @@ Reglas específicas de categorización:
   const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
 
-  // Gastos compartidos (monto total del hogar = monto_dividir)
-  const gastosComp = filtrados.filter(g => g.tipo_mov==="Gasto" && g.monto_dividir);
-  const totalComp  = gastosComp.reduce((s,g) => s + g.monto_dividir, 0);
+  // Gastos compartidos: propios (tienen monto_dividir) + los del partner (gc_ prefix, monto_dividir=null)
+  const isGastoComp = g =>
+    g.tipo_mov==="Gasto" && (
+      g.monto_dividir != null ||
+      (typeof g.id === "string" && g.id.startsWith("gc_"))
+    );
+  // Total del hogar para un gasto compartido: propio → monto_dividir; del partner → buscar en groupData
+  const montoTotalComp = g => {
+    if (g.monto_dividir != null) return g.monto_dividir;
+    const gcId = Number(g.id.slice(3));
+    return (groupData?.gastosComp||[]).find(x=>x.id===gcId)?.monto || g.monto;
+  };
+  const gastosComp = filtrados.filter(isGastoComp);
+  const totalComp  = gastosComp.reduce((s,g) => s + montoTotalComp(g), 0);
   const presupCompMes = presupComp[mk] || {};
   const totalPresupComp = Object.values(presupCompMes).reduce((s,v)=>s+v,0);
 
@@ -2649,7 +2660,7 @@ Reglas específicas de categorización:
                     <div style={{marginTop:10, display:"flex", flexDirection:"column", gap:0}}>
                       {catsComp.map(c=>{
                         const pc = presupCompMes[c.id]||0;
-                        const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+g.monto_dividir,0);
+                        const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+montoTotalComp(g),0);
                         const dif = gc - pc;
                         const over = pc>0 && dif>0;
                         const isI = c.tipo==="Indispensable";
