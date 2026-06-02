@@ -3263,6 +3263,7 @@ Reglas específicas de categorización:
               {id:"presup",      icon:"barchart", label:"Presupuesto mensual",     sub:"Montos por categoría y mes"},
               {id:"presupComp",  icon:"transfer", label:"Presupuesto compartido",   sub:"Total del hogar con tu pareja"},
               {id:"objAhorro",   icon:"star",     label:"Objetivo de ahorro",        sub:"Meta mensual de ahorro/inversión"},
+              ...(groupId ? [{id:"catsComp", icon:"users", label:"Categorías compartidas", sub:"Categorías del balance con tu pareja"}] : []),
             ].map(({id,icon,label,sub})=>(
               <button key={id} onClick={()=>setModal(id)} style={{width:"100%",display:"flex",alignItems:"center",gap:14,padding:"14px 16px",background:C.paper,borderRadius:10,border:`1px solid ${C.rule}`,marginBottom:8,cursor:"pointer",boxShadow:"0 1px 3px rgba(0,0,0,0.05)"}}>
                 <div style={{width:36,height:36,borderRadius:8,background:C.tagD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
@@ -3280,9 +3281,10 @@ Reglas específicas de categorización:
 
       {modal==="cats"       && <ModalCats/>}
       {modal==="presupComp" && <ModalPresupComp/>}
-      {modal==="objAhorro"   && <ModalObjAhorro/>}
-      {modal==="tarjetas" && <ModalTarjetas/>}
-      {modal==="presup"   && <ModalPresup/>}
+      {modal==="objAhorro"  && <ModalObjAhorro/>}
+      {modal==="tarjetas"   && <ModalTarjetas/>}
+      {modal==="presup"     && <ModalPresup/>}
+      {modal==="catsComp"   && <ModalCatsComp onClose={()=>setModal(null)}/>}
 
       {/* ── PROMPT: UNIRSE A GRUPO VÍA LINK ── */}
       {showJoinPrompt && pendingInvite && !groupId && (
