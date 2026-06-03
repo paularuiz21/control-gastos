@@ -760,7 +760,7 @@ function App() {
             {type:'image', source:{type:'base64', media_type:file.type, data:base64}},
             {type:'text', text:`Analizá este comprobante de pago argentino y respondé SOLO con un JSON (sin texto extra):
 {
-  "fecha": "YYYY-MM-DD",
+  "fecha": "YYYY-MM-DD" (el año actual es 2026, si no se ve el año en el comprobante usá 2026),
   "monto": número (solo dígitos y punto decimal, ej: 23060.20),
   "moneda": "ARS" o "USD",
   "tipo_mov": "Gasto" o "Ingreso" o "Ahorro",
