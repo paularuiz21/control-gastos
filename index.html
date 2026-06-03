@@ -777,7 +777,29 @@ Reglas específicas de categorización:
 - McDonald's, Burger King, restaurantes, bares, cafeterías → categoría Comidas afuera
 - Netflix, Spotify, Disney+, HBO, suscripciones digitales → categoría Suscripciones
 - Farmacity, farmacias, médicos, clínicas → categoría Salud
-- MercadoPago sin comercio identificado → categoría Transferencia`}
+- MercadoPago sin comercio identificado → categoría Transferencia
+
+Historial de gastos previos de este usuario (usá esto para aprender sus patrones de categorización):
+${(()=>{
+  // Tomar los gastos con observacion, deduplicar por observacion+categoria, máx 30 ejemplos
+  const seen = new Set();
+  const ejemplos = [...gastos]
+    .filter(g => g.observacion && g.gasto && g.tipo_mov==="Gasto")
+    .sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""))
+    .filter(g => {
+      const key = g.observacion.toLowerCase().trim();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 30)
+    .map(g => {
+      const cat = catsSorted.find(c=>c.id===g.gasto);
+      return cat ? `- "${g.observacion}" → ${cat.label}` : null;
+    })
+    .filter(Boolean);
+  return ejemplos.length > 0 ? ejemplos.join("\n") : "(sin historial aún)";
+})()}`}
           ]}]
         })
       });
