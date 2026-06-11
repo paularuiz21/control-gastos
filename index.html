@@ -151,6 +151,7 @@ const ICONS = {
   barchart:  ["M18 20V10","M12 20V4","M6 20v-6"],
   settings:  ["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
   download:  ["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4","M7 10l5 5 5-5","M12 15V3"],
+  upload:    ["M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4","M17 8l-5-5-5 5","M12 3v12"],
   x:         ["M18 6L6 18","M6 6l12 12"],
   check:     "M20 6L9 17l-5-5",
   edit:      ["M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7","M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"],
@@ -1200,6 +1201,30 @@ ${(()=>{
     const a=document.createElement("a");
     a.href=URL.createObjectURL(new Blob([JSON.stringify(data,null,2)],{type:"application/json"}));
     a.download=`backup_completo_${new Date().toISOString().split("T")[0]}.json`; a.click();
+  };
+
+  const restaurarDesdeBackup = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        if (!Array.isArray(data.gastos)) { alert("Archivo inválido: no contiene gastos."); return; }
+        const existingIds = new Set(gastos.map(g => String(g.id)));
+        const nuevos = data.gastos.filter(g => !existingIds.has(String(g.id)));
+        if (nuevos.length === 0) {
+          alert("No hay gastos nuevos para recuperar — todos ya están en la app.");
+          return;
+        }
+        setGastos(gs => {
+          const merged = [...nuevos, ...gs];
+          const seen = new Set();
+          return merged.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; });
+        });
+        alert(`✓ Recuperados ${nuevos.length} gastos del backup.\n${existingIds.size} ya existían y no fueron modificados.`);
+      } catch(err) { alert("Error al leer el archivo: " + err.message); }
+    };
+    reader.readAsText(file);
   };
 
   /* ── STYLES ── */
@@ -3429,6 +3454,14 @@ ${(()=>{
                     <div style={{fontFamily:sans,fontSize:11,color:C.mid}}>Gastos + categorías + presupuestos + balance</div>
                   </div>
                 </button>
+                <label style={{width:"100%",display:"flex",alignItems:"center",gap:10,padding:"11px 13px",background:C.paper,borderRadius:8,border:`1px solid ${C.rule}`,cursor:"pointer"}}>
+                  <input type="file" accept=".json" style={{display:"none"}} onChange={e=>{ restaurarDesdeBackup(e.target.files[0]); e.target.value=""; }}/>
+                  <Icon name="upload" size={15} color={C.red}/>
+                  <div style={{textAlign:"left"}}>
+                    <div style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>Restaurar desde backup (JSON)</div>
+                    <div style={{fontFamily:sans,fontSize:11,color:C.mid}}>Agrega los gastos faltantes · no borra ni pisa los actuales</div>
+                  </div>
+                </label>
               </div>
             </div>
 
