@@ -1211,7 +1211,11 @@ ${(()=>{
         const data = JSON.parse(e.target.result);
         if (!Array.isArray(data.gastos)) { alert("Archivo inválido: no contiene gastos."); return; }
         const existingIds = new Set(gastos.map(g => String(g.id)));
-        const nuevos = data.gastos.filter(g => !existingIds.has(String(g.id)));
+        // Excluir gc_ (los maneja auto-sync solo) y solo incluir gastos propios
+        const nuevos = data.gastos.filter(g =>
+          !existingIds.has(String(g.id)) &&
+          !(typeof g.id === "string" && g.id.startsWith("gc_"))
+        );
         if (nuevos.length === 0) {
           alert("No hay gastos nuevos para recuperar — todos ya están en la app.");
           return;
