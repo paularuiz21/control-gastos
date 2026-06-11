@@ -585,9 +585,20 @@ function App() {
     fsLoad(authUser.uid).then(data => {
       if (data) {
         if (Array.isArray(data.gastos)) {
-          // Deduplicar por ID al cargar (puede haber duplicados por re-sync tras recuperación)
+          // Merge Firestore + localStorage: nunca pisar datos locales buenos con menos datos de Firestore.
+          // Si Firestore tiene gastos que no están en localStorage → se agregan.
+          // Si localStorage tiene gastos que Firestore no tiene → se recuperan (evita pérdida silenciosa).
+          const localGastos = load("v6_gastos", []);
+          const mergedById = new Map();
+          // Primero localStorage (base confiable), luego Firestore (puede tener versiones más recientes)
+          localGastos.forEach(g => mergedById.set(g.id, g));
+          data.gastos.forEach(g => mergedById.set(g.id, g));
+          const merged = Array.from(mergedById.values());
+          const recovered = merged.length - data.gastos.length;
+          if (recovered > 0) console.warn(`[sync] Recuperados ${recovered} gastos de localStorage que faltaban en Firestore`);
+          // Deduplicar por si acaso
           const seen = new Set();
-          setGastos(data.gastos.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; }));
+          setGastos(merged.filter(g => { if (seen.has(g.id)) return false; seen.add(g.id); return true; }));
         }
         if (Array.isArray(data.cats) && data.cats.length > 0)   setCats(data.cats);
         if (Array.isArray(data.catsIngreso))                     setCatsIngreso(data.catsIngreso);
