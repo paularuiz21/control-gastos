@@ -47,6 +47,16 @@
     }
     const fbAuth = FB_CONFIGURED ? firebase.auth()      : null;
     const fbDb   = FB_CONFIGURED ? firebase.firestore() : null;
+    // Persistencia offline: las escrituras quedan encoladas en IndexedDB y se
+    // completan solas al recuperar conexión, aunque se cierre la app antes.
+    // synchronizeTabs evita el error si hay más de una pestaña abierta.
+    if (fbDb) {
+      fbDb.enablePersistence({synchronizeTabs: true}).catch(e => {
+        // failed-precondition: otra pestaña sin sync / unimplemented: navegador viejo.
+        // La app funciona igual, solo sin cola offline.
+        console.warn("Firestore persistence no disponible:", e.code || e);
+      });
+    }
   </script>
 
   <script type="text/babel">
@@ -55,12 +65,26 @@
 /* ── FIREBASE HELPERS ─────────────────────────────────────── */
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+// Devuelve {ok:true, data} (data puede ser null si el doc no existe — usuario nuevo)
+// o {ok:false} si hubo error de red. Distinguirlos es clave: ante un error NO se debe
+// habilitar el guardado, porque se pisaría Firestore con un estado incompleto.
 const fsLoad = async (uid) => {
-  if (!fbDb) return null;
+  if (!fbDb) return {ok: true, data: null};
   try {
     const snap = await fbDb.collection("users").doc(uid).get();
-    return snap.exists ? snap.data() : null;
-  } catch(e) { console.warn("fsLoad error:", e); return null; }
+    return {ok: true, data: snap.exists ? snap.data() : null};
+  } catch(e) { console.warn("fsLoad error:", e); return {ok: false}; }
+};
+
+// Reintenta fsLoad hasta 4 veces con espera creciente (0s, 1s, 2s, 4s)
+const fsLoadConReintentos = async (uid) => {
+  const esperas = [0, 1000, 2000, 4000];
+  for (let i = 0; i < esperas.length; i++) {
+    if (esperas[i]) await new Promise(r => setTimeout(r, esperas[i]));
+    const r = await fsLoad(uid);
+    if (r.ok) return r;
+  }
+  return {ok: false};
 };
 
 const fsSave = debounce(async (uid, data) => {
@@ -459,6 +483,8 @@ function App() {
   const [authUser,   setAuthUser]   = useState(FB_CONFIGURED ? null : false);
   const [isGuest,    setIsGuest]    = useState(!FB_CONFIGURED || localStorage.getItem("v3_guest") === "1");
   const [syncReady,  setSyncReady]  = useState(!FB_CONFIGURED);
+  const [loadFailed,  setLoadFailed]  = useState(false); // carga inicial falló tras reintentos
+  const [loadAttempt, setLoadAttempt] = useState(0);     // contador para reintentar manualmente
 
   const [gastos, setGastos] = useState(() => load("v6_gastos", []));
   const gastosRef = React.useRef([]);
@@ -583,7 +609,16 @@ function App() {
     if (!FB_CONFIGURED || isGuest) { setSyncReady(true); return; }
     if (!authUser) return;
     setSyncReady(false);
-    fsLoad(authUser.uid).then(data => {
+    setLoadFailed(false);
+    fsLoadConReintentos(authUser.uid).then(r => {
+      if (!r.ok) {
+        // Error de red tras 4 intentos: NO habilitar el guardado.
+        // Habilitarlo pisaría Firestore con un estado incompleto (la causa
+        // original de la pérdida de gastos). El usuario puede reintentar.
+        setLoadFailed(true);
+        return;
+      }
+      const data = r.data;
       if (data) {
         if (Array.isArray(data.gastos)) {
           // Merge Firestore + localStorage: nunca pisar datos locales buenos con menos datos de Firestore.
@@ -620,7 +655,7 @@ function App() {
       }
       setSyncReady(true);
     });
-  }, [authUser, isGuest]);
+  }, [authUser, isGuest, loadAttempt]);
 
   /* ── FIREBASE: guardar en Firestore cuando cambia cualquier estado ── */
   useEffect(() => {
@@ -2165,8 +2200,23 @@ ${(()=>{
   }
   if (authUser && !isGuest && !syncReady) {
     return (
-      <div style={{minHeight:"100vh",background:C.dark,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{fontFamily:sans,color:C.faint,fontSize:13,letterSpacing:"0.1em"}}>Sincronizando datos…</div>
+      <div style={{minHeight:"100vh",background:C.dark,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+        {loadFailed ? (
+          <div style={{textAlign:"center",maxWidth:300}}>
+            <div style={{fontFamily:sans,color:"#F87171",fontSize:14,fontWeight:700,marginBottom:8}}>
+              No se pudieron cargar tus datos
+            </div>
+            <div style={{fontFamily:sansR,color:C.faint,fontSize:12,lineHeight:1.5,marginBottom:18}}>
+              Hubo un problema de conexión. Para proteger tus datos, la app no va a guardar nada hasta poder leerlos correctamente.
+            </div>
+            <button onClick={()=>setLoadAttempt(a=>a+1)}
+              style={{padding:"12px 28px",borderRadius:10,border:"none",background:"#fff",color:C.dark,fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
+              Reintentar
+            </button>
+          </div>
+        ) : (
+          <div style={{fontFamily:sans,color:C.faint,fontSize:13,letterSpacing:"0.1em"}}>Sincronizando datos…</div>
+        )}
       </div>
     );
   }
