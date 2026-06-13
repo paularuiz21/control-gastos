@@ -347,7 +347,7 @@ const C = {
   dark:"#1C1A17", bg:"#F0EDE8", paper:"#FFFFFF",
   rule:"#E4E0DA", ink:"#1C1A17", mid:"#A09890", faint:"#6B6460",
   accent:"#E8450A", red:"#C0392B", green:"#1A6B3A",
-  amber:"#9A5200", blue:"#1B4F9A", tagI:"#FEF0E8", tagD:"#EEF3FF", comp:"#7C3AED", tagComp:"#F5F0FF",
+  amber:"#9A5200", blue:"#1E3F75", tagI:"#FEF0E8", tagD:"#E8EEF8", comp:"#7C3AED", tagComp:"#F5F0FF",
   dark2:"#2A2724",
 };
 const sans  = "'Barlow Condensed',sans-serif";
@@ -1329,7 +1329,7 @@ ${(()=>{
                 background:seccion==="Gasto"?(c.tipo==="Indispensable"?C.tagI:C.tagD):"#F0EDE8",
                 display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                 <Icon name={c.icon||"star"} size={13}
-                  color={seccion==="Gasto"?(c.tipo==="Indispensable"?C.accent:"#4A7CC7"):seccionColor}/>
+                  color={seccion==="Gasto"?(c.tipo==="Indispensable"?C.accent:"#3E6BA8"):seccionColor}/>
               </div>
               <div style={{flex:1,minWidth:0}}>
                 <input value={c.label} onChange={e=>setLocal(l=>l.map((x,j)=>j===i?{...x,label:e.target.value}:x))}
@@ -1493,7 +1493,7 @@ ${(()=>{
 
     return (
       <Modal title="Objetivo de Ahorro" onClose={()=>setModal(null)}>
-        <div style={{background:"#EEF3FF", border:"1px solid #BDD0EE", borderRadius:8, padding:"10px 12px", marginBottom:14}}>
+        <div style={{background:"#E8EEF8", border:"1px solid #B2C5DC", borderRadius:8, padding:"10px 12px", marginBottom:14}}>
           <p style={{fontFamily:sans, fontSize:12, color:C.blue, fontWeight:600}}>
             Definí cuánto querés ahorrar cada mes. Se compara con los movimientos de tipo Ahorro que registres.
           </p>
@@ -1564,7 +1564,7 @@ ${(()=>{
           {cats.filter(c=>c.tipo!=="").map(c=>(
             <div key={c.id} style={{...card, display:"flex", alignItems:"center", gap:10, padding:"10px 12px"}}>
               <div style={{width:28, height:28, borderRadius:6, background:c.tipo==="Indispensable"?C.tagI:C.tagD, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0}}>
-                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#4A7CC7"}/>
+                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#3E6BA8"}/>
               </div>
               <span style={{flex:1, fontFamily:sans, fontWeight:600, fontSize:13, color:C.ink}}>{c.label}</span>
               <input type="number" value={vals[c.id]||""} onChange={e=>setVal(c.id,e.target.value)}
@@ -1605,7 +1605,7 @@ ${(()=>{
           {catsSorted.filter(c=>c.tipo!=="").map(c=>(
             <div key={c.id} style={{...card,display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
               <div style={{width:28,height:28,borderRadius:6,background:c.tipo==="Indispensable"?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#4A7CC7"}/>
+                <Icon name={c.icon||"star"} size={13} color={c.tipo==="Indispensable"?C.accent:"#3E6BA8"}/>
               </div>
               <span style={{flex:1,fontFamily:sans,fontWeight:600,fontSize:13,color:C.ink}}>{c.label}</span>
               <input type="number" value={vals[c.id]||""} onChange={e=>setVal(c.id,e.target.value)}
@@ -1627,7 +1627,7 @@ ${(()=>{
     const PAD = 18 * scale;
     const DARK="#1C1A17", BG="#F0EDE8", PAPER="#FFFFFF";
     const ACCENT="#E8450A", RED="#C0392B", GREEN="#1A6B3A";
-    const MID="#A09890", RULE="#E4E0DA", BLUE="#1B4F9A";
+    const MID="#A09890", RULE="#E4E0DA", BLUE="#1E3F75";
     const fmtN = (n) => new Intl.NumberFormat("es-AR",{style:"currency",currency:"ARS",maximumFractionDigits:0}).format(n);
 
     const mk2 = mesKey(filtroMes);
@@ -1965,7 +1965,7 @@ ${(()=>{
                     border:`1.5px solid ${active?C.dark:C.rule}`,background:active?C.dark:C.paper,
                     display:"flex",alignItems:"center",gap:8,
                   }}>
-                    <Icon name="card" size={14} color={active?"#fff":"#4A7CC7"}/>
+                    <Icon name="card" size={14} color={active?"#fff":"#3E6BA8"}/>
                     <div style={{textAlign:"left"}}>
                       <div style={{fontFamily:sans,fontWeight:700,fontSize:11,color:active?"#fff":C.ink}}>{t.label}</div>
                       <div style={{fontFamily:sans,fontSize:9,color:active?"rgba(255,255,255,0.5)":C.mid}}>{t.sub}</div>
@@ -2266,11 +2266,11 @@ ${(()=>{
               </div>
               <div style={{height:4,background:C.dark2,borderRadius:2,overflow:"hidden",display:"flex"}}>
                 <div style={{width:`${(indispT/totalG)*100}%`,background:C.accent,transition:"width .5s"}}/>
-                <div style={{flex:1,background:"#4A7CC7"}}/>
+                <div style={{flex:1,background:"#3E6BA8"}}/>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
                 <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.accent}}>{Math.round((indispT/totalG)*100)}%</span>
-                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#4A7CC7"}}>{Math.round((discrT/totalG)*100)}%</span>
+                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#3E6BA8"}}>{Math.round((discrT/totalG)*100)}%</span>
               </div>
             </div>
           )}
@@ -2343,7 +2343,7 @@ ${(()=>{
             {[
               {id:"Gasto",   icon:"trending_down", col:C.red},
               {id:"Ingreso", icon:"trending_up",   col:C.green},
-              {id:"Ahorro",  icon:"star",           col:"#1B4F9A"},
+              {id:"Ahorro",  icon:"star",           col:"#1E3F75"},
             ].map(({id,icon,col})=>{
               const active=form.tipo_mov===id;
               return (
@@ -2371,7 +2371,7 @@ ${(()=>{
             const active=form.gasto===id;
             const isI=tipo==="Indispensable";
             const iconBg = active?"rgba(255,255,255,0.1)":(form.tipo_mov==="Gasto"?(isI?C.tagI:C.tagD):"#F0EDE8");
-            const iconCol = active?"#fff":(form.tipo_mov==="Ingreso"?C.green:form.tipo_mov==="Ahorro"?C.blue:(isI?C.accent:"#4A7CC7"));
+            const iconCol = active?"#fff":(form.tipo_mov==="Ingreso"?C.green:form.tipo_mov==="Ahorro"?C.blue:(isI?C.accent:"#3E6BA8"));
             return (
               <button key={id} onClick={()=>setForm({...form,gasto:id})} style={{
                 padding:"9px 11px",borderRadius:9,cursor:"pointer",textAlign:"left",
@@ -2488,7 +2488,7 @@ ${(()=>{
                       <button key={v} onClick={()=>setForm({...form,quienPago:v})}
                         style={{flex:1,padding:"7px 4px",borderRadius:7,cursor:"pointer",
                         border:`1.5px solid ${form.quienPago===v?C.blue:C.rule}`,
-                        background:form.quienPago===v?"#EEF3FF":"transparent",
+                        background:form.quienPago===v?"#E8EEF8":"transparent",
                         color:form.quienPago===v?C.blue:C.mid,
                         fontFamily:sans,fontWeight:700,fontSize:11}}>
                         {l}
@@ -2538,7 +2538,7 @@ ${(()=>{
                 display:"flex",alignItems:"center",gap:8,
                 boxShadow:active?"none":"0 1px 3px rgba(0,0,0,0.05)",transition:"all .14s",
               }}>
-                <Icon name="card" size={14} color={active?"#fff":"#4A7CC7"}/>
+                <Icon name="card" size={14} color={active?"#fff":"#3E6BA8"}/>
                 <div style={{textAlign:"left"}}>
                   <div style={{fontFamily:sans,fontWeight:700,fontSize:11,color:active?"#fff":C.ink}}>{t.label}</div>
                   <div style={{fontFamily:sans,fontSize:9,color:active?"rgba(255,255,255,0.5)":C.mid,letterSpacing:"0.06em"}}>{t.sub}</div>
@@ -2551,7 +2551,7 @@ ${(()=>{
           const info=impactoInfo(form.fecha,form.tarjeta,tarjetas);
           if(!info) return null;
           return (
-            <div style={{marginTop:10,padding:"9px 13px",borderRadius:8,background:info.cerro?"#FEF0E8":"#EEF4FF",border:`1px solid ${info.cerro?"#F5C0A0":"#BDD0EE"}`,display:"flex",alignItems:"center",gap:8}}>
+            <div style={{marginTop:10,padding:"9px 13px",borderRadius:8,background:info.cerro?"#FEF0E8":"#E8EEF8",border:`1px solid ${info.cerro?"#F5C0A0":"#B2C5DC"}`,display:"flex",alignItems:"center",gap:8}}>
               <Icon name={info.cerro?"alert":"card"} size={13} color={info.cerro?C.amber:C.blue}/>
               <span style={{fontFamily:sans,fontSize:12,fontWeight:600,color:info.cerro?C.amber:C.blue}}>
                 {info.cerro?`Cerró el ${info.cierre} — impacta en ${info.mes}`:`Impacta en ${info.mes}`}
@@ -2641,7 +2641,7 @@ ${(()=>{
                   return (
                     <div key={g.id} style={{...card,display:"flex",alignItems:"center",gap:12}}>
                       <div style={{width:38,height:38,borderRadius:9,flexShrink:0,background:isI?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                        <Icon name={cat?.icon||"star"} size={16} color={isI?C.accent:"#4A7CC7"}/>
+                        <Icon name={cat?.icon||"star"} size={16} color={isI?C.accent:"#3E6BA8"}/>
                       </div>
                       <div style={{flex:1,minWidth:0}}>
                         <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
@@ -2653,7 +2653,7 @@ ${(()=>{
                           <span style={{color:C.rule}}>·</span>
                           <span style={{fontFamily:sans,fontSize:11,color:C.mid}}>{g.via}</span>
                           {info&&(
-                            <span style={{fontFamily:sans,fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"2px 6px",borderRadius:4,background:info.cerro?"#FEF0E8":"#EEF4FF",color:info.cerro?C.amber:C.blue}}>
+                            <span style={{fontFamily:sans,fontSize:9,fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase",padding:"2px 6px",borderRadius:4,background:info.cerro?"#FEF0E8":"#E8EEF8",color:info.cerro?C.amber:C.blue}}>
                               {info.cerro?`! ${info.mes}`:info.mes}
                             </span>
                           )}
@@ -2788,9 +2788,9 @@ ${(()=>{
                   <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Indispensable</div>
                   <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.accent}}>{fmt(indispT)}</div>
                 </div>
-                <div style={{...card,borderLeft:"3px solid #4A7CC7"}}>
+                <div style={{...card,borderLeft:"3px solid #3E6BA8"}}>
                   <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Discrecional</div>
-                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:"#4A7CC7"}}>{fmt(discrT)}</div>
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:"#3E6BA8"}}>{fmt(discrT)}</div>
                 </div>
               </div>
 
@@ -2854,7 +2854,7 @@ ${(()=>{
                 {totalPresupComp>0 && (
                   <div>
                     <div style={{height:5, background:C.bg, borderRadius:3, overflow:"hidden", marginBottom:4}}>
-                      <div style={{width:`${Math.min((totalComp/totalPresupComp)*100,100)}%`, height:"100%", background:totalComp>totalPresupComp?C.red:"#7C3AED", transition:"width .5s"}}/>
+                      <div style={{width:`${Math.min((totalComp/totalPresupComp)*100,100)}%`, height:"100%", background:totalComp>totalPresupComp?C.red:"#3E6BA8", transition:"width .5s"}}/>
                     </div>
                     <div style={{fontFamily:sans, fontSize:10, color:C.mid}}>
                       {((totalComp/totalPresupComp)*100).toFixed(0)}% del presupuesto compartido · Presup: {fmt(totalPresupComp)}
@@ -2882,7 +2882,7 @@ ${(()=>{
                             <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
                               <div style={{display:"flex", alignItems:"center", gap:7}}>
                                 <div style={{width:22, height:22, borderRadius:5, background:isI?C.tagI:C.tagD, display:"flex", alignItems:"center", justifyContent:"center"}}>
-                                  <Icon name={c.icon||"star"} size={11} color={isI?C.accent:"#4A7CC7"}/>
+                                  <Icon name={c.icon||"star"} size={11} color={isI?C.accent:"#3E6BA8"}/>
                                 </div>
                                 <span style={{fontFamily:sans, fontWeight:600, fontSize:12, color:C.ink}}>{c.label}</span>
                               </div>
@@ -2893,7 +2893,7 @@ ${(()=>{
                             </div>
                             {pc>0 && (
                               <div style={{height:3, background:C.bg, borderRadius:2, overflow:"hidden"}}>
-                                <div style={{width:`${Math.min((gc/pc)*100,100)}%`, height:"100%", background:over?C.red:"#7C3AED"}}/>
+                                <div style={{width:`${Math.min((gc/pc)*100,100)}%`, height:"100%", background:over?C.red:"#3E6BA8"}}/>
                               </div>
                             )}
                           </div>
@@ -2926,7 +2926,7 @@ ${(()=>{
                       <div key={id} style={{...card}}>
                         <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
                           <div style={{width:32,height:32,borderRadius:7,flexShrink:0,background:isI?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                            <Icon name={icon||"star"} size={14} color={isI?C.accent:"#4A7CC7"}/>
+                            <Icon name={icon||"star"} size={14} color={isI?C.accent:"#3E6BA8"}/>
                           </div>
                           <span style={{flex:1,fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{label}</span>
                           <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:C.red}}>{fmt(total)}</span>
@@ -3011,7 +3011,7 @@ ${(()=>{
                       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, marginBottom:6, paddingTop:0}}>
                         {[
                           {label:"GASTADO AÑO", value:fmt(totalGR), col:C.red},
-                          {label:"PRESUP. AÑO",  value:fmt(totalPR), col:"#4A7CC7"},
+                          {label:"PRESUP. AÑO",  value:fmt(totalPR), col:"#3E6BA8"},
                         ].map(b=>(
                           <div key={b.label} style={{background:"rgba(255,255,255,0.08)", borderRadius:8, padding:"10px", borderLeft:`3px solid ${b.col}`}}>
                             <div style={{fontFamily:sans, fontSize:8, letterSpacing:"0.1em", color:C.faint, marginBottom:4}}>{b.label}</div>
@@ -3054,7 +3054,7 @@ ${(()=>{
                           <div style={{
                             display:"grid", gridTemplateColumns:"1fr 80px 80px 80px", gap:4,
                             padding:"10px 12px", alignItems:"center",
-                            background:"#EEF3FF",
+                            background:"#E8EEF8",
                             borderLeft:`3px solid ${C.blue}`,
                           }}>
                             <div>
@@ -3087,7 +3087,7 @@ ${(()=>{
                               display:"grid", gridTemplateColumns:"1fr 80px 80px 80px", gap:4,
                               padding:"10px 12px", alignItems:"center",
                               background:i%2===0?C.paper:"#F8F5F1",
-                              borderLeft:`3px solid ${isI?C.accent:"#4A7CC7"}`,
+                              borderLeft:`3px solid ${isI?C.accent:"#3E6BA8"}`,
                             }}>
                               <div>
                                 <div style={{fontFamily:sans, fontWeight:700, fontSize:12, color:C.ink}}>{c.label}</div>
@@ -3591,7 +3591,7 @@ ${(()=>{
       {showJoinPrompt && pendingInvite && !groupId && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
           <div style={{background:C.bg,borderRadius:16,padding:24,width:"100%",maxWidth:360}}>
-            <div style={{width:48,height:48,borderRadius:12,background:"#EEF3FF",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
+            <div style={{width:48,height:48,borderRadius:12,background:"#E8EEF8",display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14}}>
               <Icon name="users" size={22} color={C.blue}/>
             </div>
             <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.ink,marginBottom:8}}>Invitación al grupo</div>
