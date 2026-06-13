@@ -1187,7 +1187,7 @@ ${(()=>{
   const remanente = totalI - totalGNet - totalA;
   const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
-  const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
+  const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0) + Math.round(totalPresupComp/2);
   const _fmt = fmt; const fmtP = n => privado ? "••••" : _fmt(n);
   const _fmtUSD = fmtUSD; const fmtUSD_P = n => privado ? "••••" : _fmtUSD(n);
   const setRecurPinned  = v => { setRecurPinnedRaw(v);  save("v1_recur_pinned",  v); };
