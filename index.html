@@ -1210,7 +1210,7 @@ ${(()=>{
 
   const porCat = catsSorted.map(c=>({
     ...c,
-    total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0),
+    total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0),
     count:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").length,
   })).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
 
@@ -3003,8 +3003,11 @@ ${(()=>{
                                 <span style={{fontFamily:sans, fontWeight:600, fontSize:12, color:C.ink}}>{c.label}</span>
                               </div>
                               <div style={{textAlign:"right"}}>
-                                <span style={{fontFamily:serif, fontSize:14, fontWeight:900, color:gc>0?"#7C3AED":C.mid}}>{gc>0?fmt(gc):"—"}</span>
-                                {pc>0 && <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmtP(dif)} vs {fmtP(pc)}</div>}
+                                <span style={{fontFamily:serif, fontSize:14, fontWeight:900, color:gc>0?"#7C3AED":C.mid}}>{gc>0?fmtP(gc):"—"}</span>
+                                {pc>0
+                                  ? <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmtP(dif)} vs {fmtP(pc)}</div>
+                                  : gc>0 && <div style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</div>
+                                }
                               </div>
                             </div>
                             {pc>0 && (
