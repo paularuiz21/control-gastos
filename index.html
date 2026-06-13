@@ -3070,13 +3070,16 @@ ${(()=>{
               {(()=>{
                 const gcList=groupData?.gastosComp||[];
                 if(!gcList.length)return null;
+                const catsCompList=groupData?.catsComp||[];
+                const getCatLabel=catId=>catsCompList.find(c=>c.id===catId)?.label||catId||"Gasto";
                 const MESES_RE=/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi;
                 const norm=s=>(s||"").replace(MESES_RE,"").replace(/\s+/g," ").trim().toLowerCase();
                 const grupos={};
-                gcList.filter(g=>g.observacion).forEach(g=>{
-                  const key=norm(g.observacion);
+                gcList.forEach(g=>{
+                  const nombre=g.observacion||getCatLabel(g.catId);
+                  const key=norm(nombre);
                   if(!key)return;
-                  if(!grupos[key]){grupos[key]={nombre:g.observacion,meses:{}};}
+                  if(!grupos[key]){grupos[key]={nombre,meses:{}};}
                   const ym=(g.fecha||"").slice(0,7);
                   grupos[key].meses[ym]=(grupos[key].meses[ym]||0)+g.monto;
                 });
