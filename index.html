@@ -1174,6 +1174,8 @@ ${(()=>{
   const presupMes = presup[mk]||{};
 
   const totalG  = filtrados.filter(g=>g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  // Gastos netos: gastos compartidos al costo real del usuario (monto - monto_dividir)
+  const totalGNet = filtrados.filter(g=>g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0);
   const totalI  = filtrados.filter(g=>g.tipo_mov==="Ingreso").reduce((s,g)=>s+g.monto,0);
   const totalA     = filtrados.filter(g=>g.tipo_mov==="Ahorro").reduce((s,g)=>s+g.monto,0);
   const objAhorroMes = objAhorro[mk] || 0;
@@ -1182,7 +1184,7 @@ ${(()=>{
   const totalAAnual_USD= gastos.filter(g=>g.tipo_mov==="Ahorro"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
   const objAhorroAnual = Object.values(objAhorro).reduce((s,v)=>s+v,0);
   const totalI_USD = filtrados.filter(g=>g.tipo_mov==="Ingreso"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
-  const remanente = totalI - totalG - totalA;
+  const remanente = totalI - totalGNet - totalA;
   const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
@@ -2723,8 +2725,8 @@ ${(()=>{
 
         {/* ════ RESUMEN */}
         {tab==="resumen" && (()=>{
-          const dif=totalG-totalPresup;
-          const pctExec=totalPresup>0?(totalG/totalPresup)*100:0;
+          const dif=totalGNet-totalPresup;
+          const pctExec=totalPresup>0?(totalGNet/totalPresup)*100:0;
           return (
             <div>
               <MesTabs/>
@@ -2755,7 +2757,7 @@ ${(()=>{
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Gastos</span>
-                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.red}}>−{fmtP(totalG)}</span>
+                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.red}}>−{fmtP(totalGNet)}</span>
                   </div>
                   {totalA>0&&(
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
@@ -2847,7 +2849,7 @@ ${(()=>{
                     </div>
                     <div>
                       <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:C.mid,marginBottom:3}}>Real</div>
-                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:dif>0?C.red:C.green}}>{fmtP(totalG)}</div>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:dif>0?C.red:C.green}}>{fmtP(totalGNet)}</div>
                     </div>
                   </div>
                   <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden"}}>
@@ -3033,7 +3035,7 @@ ${(()=>{
               ) : (
                 <div style={{display:"flex",flexDirection:"column",gap:7}}>
                   {porCat.map(({id,label,tipo,icon,total,count})=>{
-                    const pct=Math.round((total/totalG)*100);
+                    const pct=Math.round((total/totalGNet)*100);
                     const isI=tipo==="Indispensable";
                     // Presupuesto efectivo = personal + mitad del compartido (para no cargar dos veces)
                     const presupCat=(presupMes[id]||0) + Math.round((presupCompMes[id]||0)/2);
