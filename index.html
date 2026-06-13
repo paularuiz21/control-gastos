@@ -549,6 +549,10 @@ function App() {
   const [scanLoading,  setScanLoading]  = useState(false);
   const [privado,    setPrivado]    = useState(false);
   const [balMesesAb, setBalMesesAb] = useState(()=>new Set([new Date().toISOString().slice(0,7)]));
+  const [recurPinnedRaw,  setRecurPinnedRaw]  = useState(()=>load("v1_recur_pinned",  null));
+  const [recurPinnedCRaw, setRecurPinnedCRaw] = useState(()=>load("v1_recur_pinned_c", null));
+  const [recurEdit,  setRecurEdit]  = useState(false);
+  const [recurEditC, setRecurEditC] = useState(false);
 
   /* ── GROUP STATE ── */
   const [groupId,           setGroupId]           = useState(null);
@@ -1184,6 +1188,8 @@ ${(()=>{
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
   const _fmt = fmt; const fmtP = n => privado ? "••••" : _fmt(n);
   const _fmtUSD = fmtUSD; const fmtUSD_P = n => privado ? "••••" : _fmtUSD(n);
+  const setRecurPinned  = v => { setRecurPinnedRaw(v);  save("v1_recur_pinned",  v); };
+  const setRecurPinnedC = v => { setRecurPinnedCRaw(v); save("v1_recur_pinned_c", v); };
 
   // Gastos compartidos: propios (tienen monto_dividir) + los del partner (gc_ prefix, monto_dividir=null)
   const isGastoComp = g =>
@@ -2851,63 +2857,91 @@ ${(()=>{
                 </div>
               )}
 
-              {/* Evolución de gastos recurrentes */}
+              {/* Evolución de gastos recurrentes — Personal */}
               {(()=>{
                 const MESES_RE=/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi;
                 const norm=s=>(s||"").replace(MESES_RE,"").replace(/\s+/g," ").trim().toLowerCase();
-                const gastosG=gastos.filter(g=>g.tipo_mov==="Gasto"&&g.observacion);
+                const fuente=gastos.filter(g=>g.tipo_mov==="Gasto"&&g.observacion);
                 const grupos={};
-                gastosG.forEach(g=>{
+                fuente.forEach(g=>{
                   const key=norm(g.observacion);
                   if(!key)return;
                   if(!grupos[key]){grupos[key]={nombre:g.observacion,meses:{}};}
                   const ym=(g.fecha_impacto||g.fecha||"").slice(0,7);
                   grupos[key].meses[ym]=(grupos[key].meses[ym]||0)+g.monto;
                 });
-                const recurrentes=Object.values(grupos)
-                  .filter(g=>Object.keys(g.meses).length>=2)
-                  .sort((a,b)=>{
-                    const lastYm=k=>Object.keys(k.meses).sort().slice(-1)[0]||"";
-                    return lastYm(b).localeCompare(lastYm(a));
-                  });
-                if(!recurrentes.length)return null;
+                const todos=Object.values(grupos).filter(g=>Object.keys(g.meses).length>=2)
+                  .sort((a,b)=>{const l=k=>Object.keys(k.meses).sort().slice(-1)[0]||"";return l(b).localeCompare(l(a));});
+                if(!todos.length)return null;
+                const pinned=recurPinnedRaw;
+                const visibles=pinned===null?todos:todos.filter(g=>(pinned||[]).includes(norm(g.nombre)));
+                const togglePin=nombre=>{
+                  const key=norm(nombre);
+                  const cur=pinned===null?todos.map(g=>norm(g.nombre)):(pinned||[]);
+                  setRecurPinned(cur.includes(key)?cur.filter(k=>k!==key):[...cur,key]);
+                };
+                const renderBars=(g,accentColor)=>{
+                  const mesesOrden=Object.keys(g.meses).sort().slice(-6);
+                  const vals=mesesOrden.map(ym=>g.meses[ym]);
+                  const last=vals[vals.length-1];
+                  const prev=vals.length>=2?vals[vals.length-2]:null;
+                  const delta=prev&&prev>0?((last-prev)/prev)*100:null;
+                  const maxVal=Math.max(...vals);
+                  return (
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"capitalize"}}>{g.nombre}</span>
+                        <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
+                          {delta!==null&&<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:delta>15?C.red:delta>5?C.amber:C.green}}>{delta>0?"+":""}{delta.toFixed(0)}%</span>}
+                          <span style={{fontFamily:serif,fontSize:13,fontWeight:900,color:C.ink}}>{fmtP(last)}</span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:3,alignItems:"flex-end"}}>
+                        {mesesOrden.map((ym,idx)=>{
+                          const barH=maxVal>0?Math.max(Math.round((g.meses[ym]/maxVal)*32),4):4;
+                          const isLast=idx===mesesOrden.length-1;
+                          const [,mm]=ym.split("-");
+                          return (
+                            <div key={ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                              <div style={{width:"100%",borderRadius:"2px 2px 0 0",background:isLast?accentColor:C.rule,height:barH}}/>
+                              <span style={{fontFamily:sans,fontSize:8,color:C.mid}}>{MESES[parseInt(mm,10)-1].slice(0,3)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                };
                 return (
                   <div style={{...card,marginBottom:14}}>
-                    <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:14}}>Gastos recurrentes</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                      {recurrentes.slice(0,6).map((g,i)=>{
-                        const mesesOrden=Object.keys(g.meses).sort().slice(-6);
-                        const vals=mesesOrden.map(ym=>g.meses[ym]);
-                        const last=vals[vals.length-1];
-                        const prev=vals.length>=2?vals[vals.length-2]:null;
-                        const delta=prev&&prev>0?((last-prev)/prev)*100:null;
-                        const maxVal=Math.max(...vals);
-                        return (
-                          <div key={i}>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                              <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"capitalize"}}>{g.nombre}</span>
-                              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
-                                {delta!==null&&<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:delta>15?C.red:delta>5?C.amber:C.green}}>{delta>0?"+":""}{delta.toFixed(0)}%</span>}
-                                <span style={{fontFamily:serif,fontSize:13,fontWeight:900,color:C.ink}}>{fmtP(last)}</span>
-                              </div>
-                            </div>
-                            <div style={{display:"flex",gap:3,alignItems:"flex-end"}}>
-                              {mesesOrden.map((ym,idx)=>{
-                                const barH=maxVal>0?Math.max(Math.round((g.meses[ym]/maxVal)*32),4):4;
-                                const isLast=idx===mesesOrden.length-1;
-                                const [,mm]=ym.split("-");
-                                return (
-                                  <div key={ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
-                                    <div style={{width:"100%",borderRadius:"2px 2px 0 0",background:isLast?"#1E3F75":C.rule,height:barH}}/>
-                                    <span style={{fontFamily:sans,fontSize:8,color:C.mid}}>{MESES[parseInt(mm,10)-1].slice(0,3)}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        );
-                      })}
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:recurEdit?10:14}}>
+                      <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Gastos recurrentes</div>
+                      <button onClick={()=>setRecurEdit(v=>!v)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:sans,fontSize:11,fontWeight:700,color:recurEdit?C.accent:C.blue,padding:0}}>
+                        {recurEdit?"Listo":"Editar"}
+                      </button>
                     </div>
+                    {recurEdit&&(
+                      <div style={{marginBottom:12}}>
+                        {todos.map((g,i)=>{
+                          const key=norm(g.nombre);
+                          const isOn=pinned===null||(pinned||[]).includes(key);
+                          return (
+                            <button key={i} onClick={()=>togglePin(g.nombre)} style={{
+                              display:"inline-flex",alignItems:"center",gap:4,margin:"0 4px 6px 0",
+                              padding:"4px 10px",borderRadius:20,border:`1.5px solid ${isOn?C.blue:C.rule}`,
+                              background:isOn?"#E8EEF8":"transparent",cursor:"pointer",
+                              fontFamily:sans,fontSize:11,fontWeight:600,color:isOn?C.blue:C.mid,
+                            }}>
+                              {isOn&&<span style={{fontSize:9}}>✓</span>}{g.nombre}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!recurEdit&&visibles.length===0
+                      ? <div style={{fontFamily:sans,fontSize:12,color:C.mid,textAlign:"center",padding:"8px 0"}}>Ninguno seleccionado · tocá Editar para elegir</div>
+                      : <div style={{display:"flex",flexDirection:"column",gap:16}}>{visibles.slice(0,6).map((g,i)=><div key={i}>{renderBars(g,"#1E3F75")}</div>)}</div>
+                    }
                   </div>
                 );
               })()}
@@ -3031,6 +3065,97 @@ ${(()=>{
                   })}
                 </div>
               )}
+
+              {/* Evolución de gastos recurrentes — Compartido */}
+              {(()=>{
+                const gcList=groupData?.gastosComp||[];
+                if(!gcList.length)return null;
+                const MESES_RE=/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi;
+                const norm=s=>(s||"").replace(MESES_RE,"").replace(/\s+/g," ").trim().toLowerCase();
+                const grupos={};
+                gcList.filter(g=>g.observacion).forEach(g=>{
+                  const key=norm(g.observacion);
+                  if(!key)return;
+                  if(!grupos[key]){grupos[key]={nombre:g.observacion,meses:{}};}
+                  const ym=(g.fecha||"").slice(0,7);
+                  grupos[key].meses[ym]=(grupos[key].meses[ym]||0)+g.monto;
+                });
+                const todos=Object.values(grupos).filter(g=>Object.keys(g.meses).length>=2)
+                  .sort((a,b)=>{const l=k=>Object.keys(k.meses).sort().slice(-1)[0]||"";return l(b).localeCompare(l(a));});
+                if(!todos.length)return null;
+                const pinned=recurPinnedCRaw;
+                const visibles=pinned===null?todos:todos.filter(g=>(pinned||[]).includes(norm(g.nombre)));
+                const togglePin=nombre=>{
+                  const key=norm(nombre);
+                  const cur=pinned===null?todos.map(g=>norm(g.nombre)):(pinned||[]);
+                  setRecurPinnedC(cur.includes(key)?cur.filter(k=>k!==key):[...cur,key]);
+                };
+                return (
+                  <div style={{...card,marginBottom:14,borderLeft:`3px solid ${C.comp}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:recurEditC?10:14}}>
+                      <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.comp}}>Gastos recurrentes compartidos</div>
+                      <button onClick={()=>setRecurEditC(v=>!v)} style={{background:"none",border:"none",cursor:"pointer",fontFamily:sans,fontSize:11,fontWeight:700,color:recurEditC?C.accent:C.comp,padding:0}}>
+                        {recurEditC?"Listo":"Editar"}
+                      </button>
+                    </div>
+                    {recurEditC&&(
+                      <div style={{marginBottom:12}}>
+                        {todos.map((g,i)=>{
+                          const key=norm(g.nombre);
+                          const isOn=pinned===null||(pinned||[]).includes(key);
+                          return (
+                            <button key={i} onClick={()=>togglePin(g.nombre)} style={{
+                              display:"inline-flex",alignItems:"center",gap:4,margin:"0 4px 6px 0",
+                              padding:"4px 10px",borderRadius:20,border:`1.5px solid ${isOn?C.comp:C.rule}`,
+                              background:isOn?C.tagComp:"transparent",cursor:"pointer",
+                              fontFamily:sans,fontSize:11,fontWeight:600,color:isOn?C.comp:C.mid,
+                            }}>
+                              {isOn&&<span style={{fontSize:9}}>✓</span>}{g.nombre}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {!recurEditC&&visibles.length===0
+                      ? <div style={{fontFamily:sans,fontSize:12,color:C.mid,textAlign:"center",padding:"8px 0"}}>Ninguno seleccionado · tocá Editar para elegir</div>
+                      : <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                          {visibles.slice(0,6).map((g,i)=>{
+                            const mesesOrden=Object.keys(g.meses).sort().slice(-6);
+                            const vals=mesesOrden.map(ym=>g.meses[ym]);
+                            const last=vals[vals.length-1];
+                            const prev=vals.length>=2?vals[vals.length-2]:null;
+                            const delta=prev&&prev>0?((last-prev)/prev)*100:null;
+                            const maxVal=Math.max(...vals);
+                            return (
+                              <div key={i}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                                  <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"capitalize"}}>{g.nombre}</span>
+                                  <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
+                                    {delta!==null&&<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:delta>15?C.red:delta>5?C.amber:C.green}}>{delta>0?"+":""}{delta.toFixed(0)}%</span>}
+                                    <span style={{fontFamily:serif,fontSize:13,fontWeight:900,color:C.comp}}>{fmtP(last)}</span>
+                                  </div>
+                                </div>
+                                <div style={{display:"flex",gap:3,alignItems:"flex-end"}}>
+                                  {mesesOrden.map((ym,idx)=>{
+                                    const barH=maxVal>0?Math.max(Math.round((g.meses[ym]/maxVal)*32),4):4;
+                                    const isLast=idx===mesesOrden.length-1;
+                                    const [,mm]=ym.split("-");
+                                    return (
+                                      <div key={ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                                        <div style={{width:"100%",borderRadius:"2px 2px 0 0",background:isLast?C.comp:C.rule,height:barH}}/>
+                                        <span style={{fontFamily:sans,fontSize:8,color:C.mid}}>{MESES[parseInt(mm,10)-1].slice(0,3)}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                    }
+                  </div>
+                );
+              })()}
               </>}
 
               {/* ══ REPORTE ANUAL ══ */}
