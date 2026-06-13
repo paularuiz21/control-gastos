@@ -1187,6 +1187,8 @@ ${(()=>{
   const remanente = totalI - totalGNet - totalA;
   const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  const presupCompMes = presupComp[mk] || {};
+  const totalPresupComp = Object.values(presupCompMes).reduce((s,v)=>s+v,0);
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0) + Math.round(totalPresupComp/2);
   const _fmt = fmt; const fmtP = n => privado ? "••••" : _fmt(n);
   const _fmtUSD = fmtUSD; const fmtUSD_P = n => privado ? "••••" : _fmtUSD(n);
@@ -1207,8 +1209,6 @@ ${(()=>{
   };
   const gastosComp = filtrados.filter(isGastoComp);
   const totalComp  = gastosComp.reduce((s,g) => s + montoTotalComp(g), 0);
-  const presupCompMes = presupComp[mk] || {};
-  const totalPresupComp = Object.values(presupCompMes).reduce((s,v)=>s+v,0);
 
   const porCat = catsSorted.map(c=>({
     ...c,
