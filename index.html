@@ -2289,22 +2289,6 @@ ${(()=>{
             </div>
           </div>
 
-          {totalG > 0 && tab!=="cargar" && (
-            <div style={{marginBottom:18}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
-                <span style={{fontFamily:sans,fontSize:10,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Indispensable</span>
-                <span style={{fontFamily:sans,fontSize:10,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Discrecional</span>
-              </div>
-              <div style={{height:4,background:C.dark2,borderRadius:2,overflow:"hidden",display:"flex"}}>
-                <div style={{width:`${(indispT/totalG)*100}%`,background:C.accent,transition:"width .5s"}}/>
-                <div style={{flex:1,background:"#3E6BA8"}}/>
-              </div>
-              <div style={{display:"flex",justifyContent:"space-between",marginTop:4}}>
-                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.accent}}>{Math.round((indispT/totalG)*100)}%</span>
-                <span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#3E6BA8"}}>{Math.round((discrT/totalG)*100)}%</span>
-              </div>
-            </div>
-          )}
 
           {/* Tabs */}
           <div style={{display:"flex"}}>
