@@ -2236,12 +2236,23 @@ ${(()=>{
       <div style={{background:C.dark,padding:"28px 20px 0"}}>
         <div style={{maxWidth:"100%",margin:"0 auto"}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-            <div>
-              <div style={{fontFamily:sans,fontSize:10,letterSpacing:"0.22em",textTransform:"uppercase",color:C.faint,marginBottom:5}}>
-                Seguimiento · 2026
-              </div>
-              <div style={{fontFamily:serif,fontSize:36,fontWeight:900,color:"#F4F0EB",letterSpacing:"-0.01em",lineHeight:1}}>
-                Control de Gastos
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <svg width="38" height="38" viewBox="0 0 512 512" style={{borderRadius:8,flexShrink:0,border:"1px solid rgba(255,255,255,0.12)"}}>
+                <rect width="512" height="512" rx="110" fill="#1E293B"/>
+                <path d="M87,146 L278,146 L278,202 L87,202 A9,9 0 0,1 78,193 L78,155 A9,9 0 0,1 87,146 Z" fill="white" opacity="0.9"/>
+                <path d="M280,146 L425,146 A9,9 0 0,1 434,155 L434,193 A9,9 0 0,1 425,202 L280,202 Z" fill="white" opacity="0.48"/>
+                <path d="M87,228 L210,228 L210,284 L87,284 A9,9 0 0,1 78,275 L78,237 A9,9 0 0,1 87,228 Z" fill="white" opacity="0.9"/>
+                <path d="M212,228 L305,228 A9,9 0 0,1 314,237 L314,275 A9,9 0 0,1 305,284 L212,284 Z" fill="white" opacity="0.48"/>
+                <path d="M87,310 L160,310 L160,366 L87,366 A9,9 0 0,1 78,357 L78,319 A9,9 0 0,1 87,310 Z" fill="white" opacity="0.9"/>
+                <path d="M162,310 L215,310 A9,9 0 0,1 224,319 L224,357 A9,9 0 0,1 215,366 L162,366 Z" fill="white" opacity="0.48"/>
+              </svg>
+              <div>
+                <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.22em",textTransform:"uppercase",color:C.faint,marginBottom:2}}>
+                  Seguimiento · 2026
+                </div>
+                <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:"#F4F0EB",letterSpacing:"-0.01em",lineHeight:1}}>
+                  ClearFigures
+                </div>
               </div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}>
@@ -2258,7 +2269,7 @@ ${(()=>{
             </div>
           </div>
 
-          {totalG > 0 && (
+          {totalG > 0 && tab!=="cargar" && (
             <div style={{marginBottom:18}}>
               <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                 <span style={{fontFamily:sans,fontSize:10,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase"}}>Indispensable</span>
