@@ -196,6 +196,8 @@ const ICONS = {
   utensils:  ["M3 2v7c0 1.1.9 2 2 2h4a2 2 0 002-2V2","M7 2v20","M21 15V2a5 5 0 00-5 5v6c0 1.1.9 2 2 2h3zm0 0v7"],
   zap:       ["M13 2L3 14h9l-1 8 10-12h-9l1-8z"],
   users:     ["M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2","M23 21v-2a4 4 0 00-3-3.87","M16 3.13a4 4 0 010 7.75","M9 7a4 4 0 100 8 4 4 0 000-8z"],
+  eye:       ["M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z","M12 9a3 3 0 100 6 3 3 0 000-6z"],
+  eyeoff:    ["M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94","M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19","M1 1l22 22"],
 };
 const Icon = ({name,size=16,color="currentColor",sw=1.7}) => {
   const d=ICONS[name]; if(!d) return null;
@@ -545,6 +547,8 @@ function App() {
   const [objAhorro,    setObjAhorro]    = useState(() => load("v5_obj_ahorro", {}));
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("v1_anthropic_key") || "");
   const [scanLoading,  setScanLoading]  = useState(false);
+  const [privado,    setPrivado]    = useState(false);
+  const [balMesesAb, setBalMesesAb] = useState(()=>new Set([new Date().toISOString().slice(0,7)]));
 
   /* ── GROUP STATE ── */
   const [groupId,           setGroupId]           = useState(null);
@@ -1178,6 +1182,8 @@ ${(()=>{
   const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0);
+  const _fmt = fmt; const fmtP = n => privado ? "••••" : _fmt(n);
+  const _fmtUSD = fmtUSD; const fmtUSD_P = n => privado ? "••••" : _fmtUSD(n);
 
   // Gastos compartidos: propios (tienen monto_dividir) + los del partner (gc_ prefix, monto_dividir=null)
   const isGastoComp = g =>
@@ -2028,7 +2034,7 @@ ${(()=>{
                 return (
                   <div key={m.uid} style={{background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
                     <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:3}}>{isMe?"Yo":otherName}</div>
-                    <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(amount)}</div>
+                    <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmtP(amount)}</div>
                     {isPayer&&<div style={{fontFamily:sans,fontSize:9,color:C.green}}>Pagó</div>}
                   </div>
                 );
@@ -2261,11 +2267,17 @@ ${(()=>{
                   {MESES[new Date().getMonth()]}
                 </span>
               </div>
+              <div style={{display:"flex",gap:5}}>
+              <button onClick={()=>setPrivado(v=>!v)} style={{background:privado?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.1)",border:"none",borderRadius:7,padding:"6px 10px",cursor:"pointer",display:"flex",gap:5,alignItems:"center"}}>
+                <Icon name={privado?"eyeoff":"eye"} size={13} color="#fff"/>
+                <span style={{fontFamily:sans,fontSize:10,color:"#fff",fontWeight:600,letterSpacing:"0.06em"}}>{privado?"Mostrar":"Ocultar"}</span>
+              </button>
               {/* Settings button */}
               <button onClick={()=>setModal("settings")} style={{background:"rgba(255,255,255,0.1)",border:"none",borderRadius:7,padding:"6px 10px",cursor:"pointer",display:"flex",gap:5,alignItems:"center"}}>
                 <Icon name="settings" size={13} color="#fff"/>
                 <span style={{fontFamily:sans,fontSize:10,color:"#fff",fontWeight:600,letterSpacing:"0.06em"}}>Config</span>
               </button>
+              </div>
             </div>
           </div>
 
@@ -2431,7 +2443,7 @@ ${(()=>{
               style={inp}/>
             {form.tcambio&&form.monto&&(
               <div style={{marginTop:6,fontFamily:sans,fontSize:12,color:C.mid}}>
-                Equivale a {fmt(parseFloat(form.monto||0)*parseFloat(form.tcambio||0))} ARS
+                Equivale a {fmtP(parseFloat(form.monto||0)*parseFloat(form.tcambio||0))} ARS
               </div>
             )}
           </div>
@@ -2481,7 +2493,7 @@ ${(()=>{
             )}
             {form.monto_dividir && (
               <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
-                Tu parte: {fmt(montoFinal())}
+                Tu parte: {fmtP(montoFinal())}
               </div>
             )}
             {groupId && (
@@ -2604,14 +2616,14 @@ ${(()=>{
                       <Icon name="trending_down" size={12} color={C.red}/>
                       <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Gastos</span>
                     </div>
-                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.red}}>{fmt(totalG)}</div>
+                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.red}}>{fmtP(totalG)}</div>
                   </div>
                   <div style={{...card,borderLeft:`3px solid ${C.green}`}}>
                     <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:5}}>
                       <Icon name="trending_up" size={12} color={C.green}/>
                       <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Ingresos</span>
                     </div>
-                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>{fmt(totalI)}</div>
+                    <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>{fmtP(totalI)}</div>
                   </div>
                 </div>
                 {totalA>0 && (
@@ -2621,8 +2633,8 @@ ${(()=>{
                         <Icon name="star" size={12} color={C.blue}/>
                         <span style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>Ahorro / Inversión</span>
                       </div>
-                      <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.blue}}>{fmt(totalA)}</div>
-                      {totalA_USD>0 && <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.blue}}>{fmtUSD(totalA_USD)}</div>}
+                      <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.blue}}>{fmtP(totalA)}</div>
+                      {totalA_USD>0 && <div style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.blue}}>{fmtUSD_P(totalA_USD)}</div>}
                     </div>
                     {objAhorroMes>0 && (
                       <div style={{marginTop:6}}>
@@ -2630,7 +2642,7 @@ ${(()=>{
                           <div style={{width:`${Math.min((totalA/objAhorroMes)*100,100)}%`,height:"100%",background:totalA>=objAhorroMes?C.green:C.blue,transition:"width .5s"}}/>
                         </div>
                         <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginTop:3}}>
-                          {((totalA/objAhorroMes)*100).toFixed(0)}% del objetivo mensual · {fmt(objAhorroMes)}
+                          {((totalA/objAhorroMes)*100).toFixed(0)}% del objetivo mensual · {fmtP(objAhorroMes)}
                         </div>
                       </div>
                     )}
@@ -2668,16 +2680,16 @@ ${(()=>{
                               {info.cerro?`! ${info.mes}`:info.mes}
                             </span>
                           )}
-                          {g.monto_dividir&&<span style={{fontFamily:sans,fontSize:11,color:C.blue}}>Total: {fmt(g.monto_dividir)}</span>}
+                          {g.monto_dividir&&<span style={{fontFamily:sans,fontSize:11,color:C.blue}}>Total: {fmtP(g.monto_dividir)}</span>}
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontFamily:serif,fontSize:18,fontWeight:900,color:g.tipo_mov==="Ingreso"?C.green:(g.tipo_mov==="Ahorro"?C.blue:C.red)}}>
-                            {g.tipo_mov==="Ingreso"?"+":"−"}{fmt(g.monto)}
+                            {g.tipo_mov==="Ingreso"?"+":"−"}{fmtP(g.monto)}
                           </div>
                           {g.moneda==="USD"&&g.monto_original&&(
-                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>{fmtUSD(g.monto_original)}</div>
+                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>{fmtUSD_P(g.monto_original)}</div>
                           )}
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -2733,30 +2745,30 @@ ${(()=>{
                 <div style={{display:"flex",flexDirection:"column",gap:6}}>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Ingresos</span>
-                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.green}}>+{fmt(totalI)}</span>
+                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.green}}>+{fmtP(totalI)}</span>
                   </div>
                   <div style={{display:"flex",justifyContent:"space-between"}}>
                     <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Gastos</span>
-                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.red}}>−{fmt(totalG)}</span>
+                    <span style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.red}}>−{fmtP(totalG)}</span>
                   </div>
                   {totalA>0&&(
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
                       <span style={{fontFamily:sans,fontSize:12,color:C.mid}}>Ahorro/Inversión</span>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.blue}}>−{fmt(totalA)}</div>
-                        {totalA_USD>0&&<div style={{fontFamily:sans,fontSize:10,color:C.blue}}>{fmtUSD(totalA_USD)}</div>}
+                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.blue}}>−{fmtP(totalA)}</div>
+                        {totalA_USD>0&&<div style={{fontFamily:sans,fontSize:10,color:C.blue}}>{fmtUSD_P(totalA_USD)}</div>}
                       </div>
                     </div>
                   )}
                   {totalI>0&&totalI_USD>0&&(
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <span style={{fontFamily:sans,fontSize:10,color:C.mid,fontStyle:"italic"}}>  incl. {fmtUSD(totalI_USD)} en ingresos</span>
+                      <span style={{fontFamily:sans,fontSize:10,color:C.mid,fontStyle:"italic"}}>  incl. {fmtUSD_P(totalI_USD)} en ingresos</span>
                     </div>
                   )}
                   <div style={{height:1,background:C.rule,margin:"2px 0"}}/>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink}}>Remanente</span>
-                    <span style={{fontFamily:serif,fontSize:24,fontWeight:900,color:remanente>=0?C.green:C.red}}>{fmt(remanente)}</span>
+                    <span style={{fontFamily:serif,fontSize:24,fontWeight:900,color:remanente>=0?C.green:C.red}}>{fmtP(remanente)}</span>
                   </div>
                 </div>
               </div>
@@ -2770,8 +2782,8 @@ ${(()=>{
                     <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
                       <span style={{fontFamily:sans, fontSize:12, color:C.mid}}>{MESES[filtroMes]} — Ahorrado</span>
                       <div style={{textAlign:"right"}}>
-                        <div style={{fontFamily:serif, fontSize:16, fontWeight:900, color:C.blue}}>{fmt(totalA)}</div>
-                        {totalA_USD>0 && <div style={{fontFamily:sans, fontSize:11, color:C.blue, fontWeight:700}}>{fmtUSD(totalA_USD)}</div>}
+                        <div style={{fontFamily:serif, fontSize:16, fontWeight:900, color:C.blue}}>{fmtP(totalA)}</div>
+                        {totalA_USD>0 && <div style={{fontFamily:sans, fontSize:11, color:C.blue, fontWeight:700}}>{fmtUSD_P(totalA_USD)}</div>}
                       </div>
                     </div>
                     {objAhorroMes > 0 && (
@@ -2780,9 +2792,9 @@ ${(()=>{
                           <div style={{width:`${Math.min((totalA/objAhorroMes)*100,100)}%`, height:"100%", background:totalA>=objAhorroMes?C.green:C.blue, transition:"width .5s"}}/>
                         </div>
                         <div style={{display:"flex", justifyContent:"space-between"}}>
-                          <span style={{fontFamily:sans, fontSize:10, color:C.mid}}>Objetivo: {fmt(objAhorroMes)}</span>
+                          <span style={{fontFamily:sans, fontSize:10, color:C.mid}}>Objetivo: {fmtP(objAhorroMes)}</span>
                           <span style={{fontFamily:sans, fontSize:10, fontWeight:700, color:totalA>=objAhorroMes?C.green:C.blue}}>
-                            {totalA>=objAhorroMes ? `+${fmt(totalA-objAhorroMes)}` : `-${fmt(objAhorroMes-totalA)}`}
+                            {totalA>=objAhorroMes ? `+${fmtP(totalA-objAhorroMes)}` : `-${fmtP(objAhorroMes-totalA)}`}
                           </span>
                         </div>
                       </>
@@ -2797,11 +2809,11 @@ ${(()=>{
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
                 <div style={{...card,borderLeft:`3px solid ${C.accent}`}}>
                   <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Indispensable</div>
-                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.accent}}>{fmt(indispT)}</div>
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.accent}}>{fmtP(indispT)}</div>
                 </div>
                 <div style={{...card,borderLeft:"3px solid #3E6BA8"}}>
                   <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:5}}>Discrecional</div>
-                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:"#3E6BA8"}}>{fmt(discrT)}</div>
+                  <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:"#3E6BA8"}}>{fmtP(discrT)}</div>
                 </div>
               </div>
 
@@ -2815,7 +2827,7 @@ ${(()=>{
                     </div>
                     <div style={{textAlign:"right"}}>
                       <div style={{fontFamily:serif,fontWeight:900,fontSize:15,color:dif>0?C.red:C.green}}>
-                        {dif>0?"+":""}{fmt(dif)}
+                        {dif>0?"+":""}{fmtP(dif)}
                       </div>
                       <div style={{fontFamily:sans,fontSize:10,color:dif>0?C.red:C.green,fontWeight:700}}>
                         {dif>0?"Exceso":"Ahorro"} {Math.abs(dif/totalPresup*100).toFixed(1)}%
@@ -2825,11 +2837,11 @@ ${(()=>{
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
                     <div>
                       <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:C.mid,marginBottom:3}}>Presupuestado</div>
-                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:C.ink}}>{fmt(totalPresup)}</div>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:C.ink}}>{fmtP(totalPresup)}</div>
                     </div>
                     <div>
                       <div style={{fontFamily:sans,fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:C.mid,marginBottom:3}}>Real</div>
-                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:dif>0?C.red:C.green}}>{fmt(totalG)}</div>
+                      <div style={{fontFamily:serif,fontWeight:900,fontSize:17,color:dif>0?C.red:C.green}}>{fmtP(totalG)}</div>
                     </div>
                   </div>
                   <div style={{height:6,background:C.bg,borderRadius:3,overflow:"hidden"}}>
@@ -2839,7 +2851,66 @@ ${(()=>{
                 </div>
               )}
 
-
+              {/* Evolución de gastos recurrentes */}
+              {(()=>{
+                const MESES_RE=/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi;
+                const norm=s=>(s||"").replace(MESES_RE,"").replace(/\s+/g," ").trim().toLowerCase();
+                const gastosG=gastos.filter(g=>g.tipo_mov==="Gasto"&&g.observacion);
+                const grupos={};
+                gastosG.forEach(g=>{
+                  const key=norm(g.observacion);
+                  if(!key)return;
+                  if(!grupos[key]){grupos[key]={nombre:g.observacion,meses:{}};}
+                  const ym=(g.fecha_impacto||g.fecha||"").slice(0,7);
+                  grupos[key].meses[ym]=(grupos[key].meses[ym]||0)+g.monto;
+                });
+                const recurrentes=Object.values(grupos)
+                  .filter(g=>Object.keys(g.meses).length>=2)
+                  .sort((a,b)=>{
+                    const lastYm=k=>Object.keys(k.meses).sort().slice(-1)[0]||"";
+                    return lastYm(b).localeCompare(lastYm(a));
+                  });
+                if(!recurrentes.length)return null;
+                return (
+                  <div style={{...card,marginBottom:14}}>
+                    <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginBottom:14}}>Gastos recurrentes</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                      {recurrentes.slice(0,6).map((g,i)=>{
+                        const mesesOrden=Object.keys(g.meses).sort().slice(-6);
+                        const vals=mesesOrden.map(ym=>g.meses[ym]);
+                        const last=vals[vals.length-1];
+                        const prev=vals.length>=2?vals[vals.length-2]:null;
+                        const delta=prev&&prev>0?((last-prev)/prev)*100:null;
+                        const maxVal=Math.max(...vals);
+                        return (
+                          <div key={i}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                              <span style={{fontFamily:sans,fontSize:12,fontWeight:700,color:C.ink,flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textTransform:"capitalize"}}>{g.nombre}</span>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0,marginLeft:8}}>
+                                {delta!==null&&<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:delta>15?C.red:delta>5?C.amber:C.green}}>{delta>0?"+":""}{delta.toFixed(0)}%</span>}
+                                <span style={{fontFamily:serif,fontSize:13,fontWeight:900,color:C.ink}}>{fmtP(last)}</span>
+                              </div>
+                            </div>
+                            <div style={{display:"flex",gap:3,alignItems:"flex-end"}}>
+                              {mesesOrden.map((ym,idx)=>{
+                                const barH=maxVal>0?Math.max(Math.round((g.meses[ym]/maxVal)*32),4):4;
+                                const isLast=idx===mesesOrden.length-1;
+                                const [,mm]=ym.split("-");
+                                return (
+                                  <div key={ym} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+                                    <div style={{width:"100%",borderRadius:"2px 2px 0 0",background:isLast?"#1E3F75":C.rule,height:barH}}/>
+                                    <span style={{fontFamily:sans,fontSize:8,color:C.mid}}>{MESES[parseInt(mm,10)-1].slice(0,3)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
 
               </>}
 
@@ -2854,10 +2925,10 @@ ${(()=>{
                     <div style={{fontFamily:sans, fontSize:11, color:C.mid}}>Total del hogar · {gastosComp.length} movimientos</div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:serif, fontSize:22, fontWeight:900, color:"#7C3AED"}}>{fmt(totalComp)}</div>
+                    <div style={{fontFamily:serif, fontSize:22, fontWeight:900, color:"#7C3AED"}}>{fmtP(totalComp)}</div>
                     {totalPresupComp>0 && (
                       <div style={{fontFamily:sans, fontSize:10, color:totalComp>totalPresupComp?C.red:C.green, fontWeight:700}}>
-                        {totalComp>totalPresupComp?"Exceso":"Ahorro"}: {fmt(Math.abs(totalComp-totalPresupComp))}
+                        {totalComp>totalPresupComp?"Exceso":"Ahorro"}: {fmtP(Math.abs(totalComp-totalPresupComp))}
                       </div>
                     )}
                   </div>
@@ -2868,7 +2939,7 @@ ${(()=>{
                       <div style={{width:`${Math.min((totalComp/totalPresupComp)*100,100)}%`, height:"100%", background:totalComp>totalPresupComp?C.red:"#3E6BA8", transition:"width .5s"}}/>
                     </div>
                     <div style={{fontFamily:sans, fontSize:10, color:C.mid}}>
-                      {((totalComp/totalPresupComp)*100).toFixed(0)}% del presupuesto compartido · Presup: {fmt(totalPresupComp)}
+                      {((totalComp/totalPresupComp)*100).toFixed(0)}% del presupuesto compartido · Presup: {fmtP(totalPresupComp)}
                     </div>
                   </div>
                 )}
@@ -2899,7 +2970,7 @@ ${(()=>{
                               </div>
                               <div style={{textAlign:"right"}}>
                                 <span style={{fontFamily:serif, fontSize:14, fontWeight:900, color:gc>0?"#7C3AED":C.mid}}>{gc>0?fmt(gc):"—"}</span>
-                                {pc>0 && <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmt(dif)} vs {fmt(pc)}</div>}
+                                {pc>0 && <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmtP(dif)} vs {fmtP(pc)}</div>}
                               </div>
                             </div>
                             {pc>0 && (
@@ -2940,7 +3011,7 @@ ${(()=>{
                             <Icon name={icon||"star"} size={14} color={isI?C.accent:"#3E6BA8"}/>
                           </div>
                           <span style={{flex:1,fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{label}</span>
-                          <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:C.red}}>{fmt(total)}</span>
+                          <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:C.red}}>{fmtP(total)}</span>
                         </div>
                         <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
                           <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
@@ -2948,10 +3019,10 @@ ${(()=>{
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
                           <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
                             {count} registro{count!==1?"s":""}
-                            {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmt(presupCat)}{(presupCompMes[id]||0)>0&&(presupMes[id]||0)===0&&<span style={{color:C.comp}}> (compartido)</span>}</span>}
+                            {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmtP(presupCat)}{(presupCompMes[id]||0)>0&&(presupMes[id]||0)===0&&<span style={{color:C.comp}}> (compartido)</span>}</span>}
                           </span>
                           {presupCat>0
-                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmt(difCat)}</span>
+                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmtP(difCat)}</span>
                             :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
                           }
                         </div>
@@ -3033,7 +3104,7 @@ ${(()=>{
                       <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, paddingBottom:16}}>
                         {[
                           {label:"RAF",              value:fmt(rafR),       col:rafR>=0?C.green:C.red},
-                          ...(!isComp && (totalAAnual>0||objAhorroAnual>0) ? [{label:"AHORRO AÑO", value:fmt(totalAAnual), col:C.blue, sub:totalAAnual_USD>0?fmtUSD(totalAAnual_USD):(objAhorroAnual>0?`Obj: ${fmt(objAhorroAnual)}`:"")}] : []),
+                          ...(!isComp && (totalAAnual>0||objAhorroAnual>0) ? [{label:"AHORRO AÑO", value:fmt(totalAAnual), col:C.blue, sub:totalAAnual_USD>0?fmtUSD(totalAAnual_USD):(objAhorroAnual>0?`Obj: ${fmtP(objAhorroAnual)}`:"")}] : []),
                         ].map(b=>(
                           <div key={b.label} style={{background:"rgba(255,255,255,0.08)", borderRadius:8, padding:"10px", borderLeft:`3px solid ${b.col}`}}>
                             <div style={{fontFamily:sans, fontSize:8, letterSpacing:"0.1em", color:C.faint, marginBottom:4}}>{b.label}</div>
@@ -3078,7 +3149,7 @@ ${(()=>{
                             </div>
                             <div style={{textAlign:"right"}}>
                               <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:C.blue}}>{totalAAnual>0?fmt(totalAAnual):"—"}</div>
-                              {totalAAnual_USD>0 && <div style={{fontFamily:sans, fontSize:10, color:C.blue, fontWeight:700}}>{fmtUSD(totalAAnual_USD)}</div>}
+                              {totalAAnual_USD>0 && <div style={{fontFamily:sans, fontSize:10, color:C.blue, fontWeight:700}}>{fmtUSD_P(totalAAnual_USD)}</div>}
                             </div>
                             <div style={{fontFamily:serif, fontSize:12, fontWeight:900, color:objAhorroAnual>0?C.ink:C.mid, textAlign:"right"}}>{objAhorroAnual>0?fmt(objAhorroAnual):"—"}</div>
                             <div style={{fontFamily:serif, fontSize:12, fontWeight:900, textAlign:"right",
@@ -3263,13 +3334,13 @@ ${(()=>{
                   <div style={{fontFamily:serif,fontSize:22,fontWeight:900,color:C.green}}>¡Están al día!</div>
                 ) : balance>0 ? (
                   <div>
-                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.green}}>{fmt(balance)}</div>
-                    <div style={{fontFamily:sans,fontSize:13,color:C.green,marginTop:4}}>{partner?.displayName||"Otra persona"} te debe {fmt(balance)}</div>
+                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.green}}>{fmtP(balance)}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.green,marginTop:4}}>{partner?.displayName||"Otra persona"} te debe {fmtP(balance)}</div>
                   </div>
                 ) : (
                   <div>
-                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.red}}>{fmt(Math.abs(balance))}</div>
-                    <div style={{fontFamily:sans,fontSize:13,color:C.red,marginTop:4}}>Le debés {fmt(Math.abs(balance))} a {partner?.displayName||"otra persona"}</div>
+                    <div style={{fontFamily:serif,fontSize:26,fontWeight:900,color:C.red}}>{fmtP(Math.abs(balance))}</div>
+                    <div style={{fontFamily:sans,fontSize:13,color:C.red,marginTop:4}}>Le debés {fmtP(Math.abs(balance))} a {partner?.displayName||"otra persona"}</div>
                   </div>
                 )}
                 <div style={{display:"flex",gap:6,marginTop:12}}>
@@ -3279,7 +3350,7 @@ ${(()=>{
                     return (
                       <div key={m.uid} style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
                         <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:2}}>{isMe?"Yo":(m.displayName||"Otra persona")}</div>
-                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.ink}}>{fmt(paid)}</div>
+                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:C.ink}}>{fmtP(paid)}</div>
                         <div style={{fontFamily:sans,fontSize:9,color:C.mid}}>pagado</div>
                       </div>
                     );
@@ -3347,13 +3418,13 @@ ${(()=>{
                                 </span>
                               ) : (
                                 <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:isPayer?"#F0FBF5":"#FFF5F5",color:isPayer?C.green:C.red}}>
-                                  {isPayer?`te deben ${fmt(item.montoOtro)}`:`debés ${fmt(item.montoOtro)}`}
+                                  {isPayer?`te deben ${fmtP(item.montoOtro)}`:`debés ${fmtP(item.montoOtro)}`}
                                 </span>
                               )}
                             </div>
                           </div>
                           <div style={{textAlign:"right",flexShrink:0}}>
-                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(item.monto)}</div>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmtP(item.monto)}</div>
                             <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
                           </div>
                         </div>
@@ -3378,7 +3449,7 @@ ${(()=>{
                             </div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmt(item.monto)}</div>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmtP(item.monto)}</div>
                             <button onClick={()=>{
                               const newP=pagos.filter(p=>p.id!==item.id);
                               fbDb.collection("groups").doc(groupId).update({pagos:newP});
@@ -3389,9 +3460,40 @@ ${(()=>{
                         </div>
                       );
                   };
+                  const gruposMes = {};
+                  historiaActiva.forEach(item => {
+                    const ym = (item.fecha||"").slice(0,7);
+                    if (!gruposMes[ym]) gruposMes[ym] = [];
+                    gruposMes[ym].push(item);
+                  });
+                  const mesesOrden = Object.keys(gruposMes).sort((a,b)=>b.localeCompare(a));
                   return (
-                <div style={{display:"flex",flexDirection:"column",gap:7}}>
-                  {historiaActiva.map(item => item.tipo==="gasto" ? renderGasto(item,false) : renderPago(item))}
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {mesesOrden.map(ym => {
+                    const [yy,mm] = ym.split("-");
+                    const label = `${MESES[parseInt(mm,10)-1]} ${yy}`;
+                    const open = balMesesAb.has(ym);
+                    return (
+                      <div key={ym} style={{marginBottom:2}}>
+                        <button onClick={()=>setBalMesesAb(prev=>{const n=new Set(prev);n.has(ym)?n.delete(ym):n.add(ym);return n;})}
+                          style={{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",
+                            padding:"9px 13px",background:C.bg,border:"none",
+                            borderRadius:open?"8px 8px 0 0":8,cursor:"pointer",
+                            borderBottom:open?`1px solid ${C.rule}`:"none"}}>
+                          <span style={{fontFamily:sans,fontSize:11,fontWeight:700,color:C.ink,letterSpacing:"0.07em",textTransform:"uppercase"}}>{label}</span>
+                          <div style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>{gruposMes[ym].length} mov.</span>
+                            <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>{open?"▲":"▼"}</span>
+                          </div>
+                        </button>
+                        {open && (
+                          <div style={{display:"flex",flexDirection:"column",gap:4,background:C.bg,borderRadius:"0 0 8px 8px",padding:"4px 0"}}>
+                            {gruposMes[ym].map(item => item.tipo==="gasto" ? renderGasto(item,false) : renderPago(item))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                   {historiaPendiente.length>0 && <>
                     <div style={{fontFamily:sans,fontSize:10,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid,marginTop:6,marginBottom:2}}>
                       Pendiente — activa cuando llegue el mes de impacto
@@ -3564,7 +3666,7 @@ ${(()=>{
                                       {g.observacion||cat?.label||"Sin descripción"}
                                     </div>
                                     <div style={{fontFamily:sansR,fontSize:11,color:C.mid,marginTop:2}}>
-                                      {cat?.label||"—"} · {fmt(g.fecha)} · ${(g.monto||0).toLocaleString("es-AR")}
+                                      {cat?.label||"—"} · {fmtP(g.fecha)} · ${(g.monto||0).toLocaleString("es-AR")}
                                     </div>
                                     <div style={{fontFamily:sansR,fontSize:10,color:C.faint,marginTop:1}}>
                                       {motivo} · {fmtDel}
