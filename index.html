@@ -695,7 +695,7 @@ function App() {
   useEffect(() => {
     if (!groupData || !authUser || !cats.length) return;
     const myUid     = authUser.uid;
-    const catsComp  = groupData.catsComp || CATS_COMP_DEFAULT;
+    const catsComp  = groupData?.catsComp?.length?groupData.catsComp:CATS_COMP_DEFAULT;
     const allGC     = groupData.gastosComp || [];
     const currentGCIds  = new Set(allGC.map(g => g.id));
     const currentSynced = gastosCompSyncedRef.current;
@@ -2125,7 +2125,7 @@ ${(()=>{
 
   /* ── MODAL: CATEGORÍAS COMPARTIDAS ── */
   const ModalCatsComp = ({onClose}) => {
-    const [local, setLocal] = useState(groupData?.catsComp||CATS_COMP_DEFAULT);
+    const [local, setLocal] = useState(groupData?.catsComp?.length?groupData.catsComp:CATS_COMP_DEFAULT);
     const [nueva, setNueva] = useState({label:"",icon:"star"});
     const guardar = () => {
       fbDb.collection("groups").doc(groupId).update({catsComp:local});
@@ -3429,7 +3429,7 @@ ${(()=>{
           const members     = groupData?.members||[];
           const myUid       = authUser?.uid;
           const partner     = members.find(m=>m.uid!==myUid);
-          const catsComp    = groupData?.catsComp||CATS_COMP_DEFAULT;
+          const catsComp    = groupData?.catsComp?.length?groupData.catsComp:CATS_COMP_DEFAULT;
           const balance     = calcBalance(gastosComp, pagos, myUid);
           const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
           const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
