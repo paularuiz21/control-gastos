@@ -1556,7 +1556,7 @@ ${(()=>{
     const [mesSel, setMesSel] = useState(filtroMes);
     const mk2 = mesKey(mesSel);
     const vals = local[mk2]||{};
-    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...vals,[catId]:parseFloat(v)||0}}));
+    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...(p[mk2]||{}),[catId]:parseFloat(v)||0}}));
 
     return (
       <Modal title="Presupuesto compartido" onClose={()=>setModal(null)}>
@@ -1600,7 +1600,7 @@ ${(()=>{
     const mk2 = mesKey(mesSel);
     const vals = local[mk2]||{};
 
-    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...vals,[catId]:parseFloat(v)||0}}));
+    const setVal = (catId, v) => setLocal(p=>({...p,[mk2]:{...(p[mk2]||{}),[catId]:parseFloat(v)||0}}));
 
     return (
       <Modal title="Presupuesto" onClose={()=>setModal(null)}>
