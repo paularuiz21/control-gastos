@@ -2327,24 +2327,24 @@ ${(()=>{
       )}
 
       {/* ── Botón cargar desde foto ── */}
-      {anthropicKey && (
-        <div>
-          <input id="foto-input" type="file" accept="image/*"
-            style={{display:"none"}}
-            onChange={e => { if(e.target.files[0]) analyzeImage(e.target.files[0]); e.target.value=""; }}/>
-          <button onClick={()=>document.getElementById('foto-input').click()}
-            disabled={scanLoading}
-            style={{width:"100%",padding:"12px",borderRadius:10,border:`1.5px dashed ${C.blue}`,
-              background:C.tagD,color:C.blue,fontFamily:sans,fontWeight:700,fontSize:13,
-              cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
-              opacity:scanLoading?.6:1}}>
-            {scanLoading
-              ? <><Icon name="clock" size={15} color={C.blue}/>Analizando comprobante…</>
-              : <><Icon name="download" size={15} color={C.blue}/>Cargar desde foto</>
-            }
-          </button>
-        </div>
-      )}
+      <div>
+        <input id="foto-input" type="file" accept="image/*"
+          style={{display:"none"}}
+          onChange={e => { if(e.target.files[0]) analyzeImage(e.target.files[0]); e.target.value=""; }}/>
+        <button onClick={()=>anthropicKey?document.getElementById('foto-input').click():setModal("settings")}
+          disabled={scanLoading}
+          style={{width:"100%",padding:"12px",borderRadius:10,border:`1.5px dashed ${anthropicKey?C.blue:C.mid}`,
+            background:anthropicKey?C.tagD:"transparent",color:anthropicKey?C.blue:C.mid,fontFamily:sans,fontWeight:700,fontSize:13,
+            cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:8,
+            opacity:scanLoading?.6:1}}>
+          {scanLoading
+            ? <><Icon name="clock" size={15} color={C.blue}/>Analizando comprobante…</>
+            : anthropicKey
+              ? <><Icon name="download" size={15} color={C.blue}/>Cargar desde foto</>
+              : <><Icon name="settings" size={15} color={C.mid}/>Cargar desde foto · configurar API</>
+          }
+        </button>
+      </div>
 
       {/* Fecha + Tipo */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
@@ -3660,7 +3660,7 @@ ${(()=>{
       {/* ── SETTINGS MINI MENU ── */}
       {modal==="settings" && (
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.4)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"}} onClick={()=>setModal(null)}>
-          <div style={{background:C.bg,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:460,padding:"20px 16px 32px"}} onClick={e=>e.stopPropagation()}>
+          <div style={{background:C.bg,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:460,padding:"20px 16px 32px",maxHeight:"90vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
             <div style={{fontFamily:serif,fontSize:20,fontWeight:900,color:C.ink,marginBottom:16}}>Configuración</div>
 
             {/* ── API key de Anthropic ── */}
