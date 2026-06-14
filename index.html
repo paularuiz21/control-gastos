@@ -714,7 +714,7 @@ function App() {
         || cats[0];
       return {
         fecha: g.fecha, fecha_impacto: fi,
-        gasto: catMatch?.id, observacion: g.observacion||"",
+        gasto: catMatch?.id, observacion: g.observacion || catsComp.find(c=>c.id===g.catId)?.label || "",
         tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
         via: viaFinal, tarjeta:(isMyEntry&&g.tarjeta)?g.tarjeta:null,
         monto_dividir:null, monto:myShare,
@@ -2847,15 +2847,12 @@ ${(()=>{
               {(()=>{
                 const MESES_RE=/\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre)\b/gi;
                 const norm=s=>(s||"").replace(MESES_RE,"").replace(/\s+/g," ").trim().toLowerCase();
-                const getCatNombre=catId=>catsSorted.find(c=>c.id===catId)?.label||"";
-                const nombreGasto=g=>g.observacion||getCatNombre(g.gasto);
-                const fuente=gastos.filter(g=>g.tipo_mov==="Gasto"&&nombreGasto(g));
+                const fuente=gastos.filter(g=>g.tipo_mov==="Gasto"&&g.observacion);
                 const grupos={};
                 fuente.forEach(g=>{
-                  const nombre=nombreGasto(g);
-                  const key=norm(nombre);
+                  const key=norm(g.observacion);
                   if(!key)return;
-                  if(!grupos[key]){grupos[key]={nombre,meses:{}};}
+                  if(!grupos[key]){grupos[key]={nombre:g.observacion,meses:{}};}
                   const ym=(g.fecha_impacto||g.fecha||"").slice(0,7);
                   grupos[key].meses[ym]=(grupos[key].meses[ym]||0)+g.monto;
                 });
