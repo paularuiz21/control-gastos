@@ -1175,8 +1175,7 @@ ${(()=>{
   const presupMes = presup[mk]||{};
 
   const totalG  = filtrados.filter(g=>g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
-  // Gastos netos: gastos compartidos al costo real del usuario (monto - monto_dividir)
-  const totalGNet = filtrados.filter(g=>g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0);
+  const totalGNet = totalG;
   const totalI  = filtrados.filter(g=>g.tipo_mov==="Ingreso").reduce((s,g)=>s+g.monto,0);
   const totalA     = filtrados.filter(g=>g.tipo_mov==="Ahorro").reduce((s,g)=>s+g.monto,0);
   const objAhorroMes = objAhorro[mk] || 0;
@@ -1186,8 +1185,8 @@ ${(()=>{
   const objAhorroAnual = Object.values(objAhorro).reduce((s,v)=>s+v,0);
   const totalI_USD = filtrados.filter(g=>g.tipo_mov==="Ingreso"&&g.moneda==="USD").reduce((s,g)=>s+(g.monto_original||0),0);
   const remanente = totalI - totalGNet - totalA;
-  const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0);
-  const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0);
+  const indispT = filtrados.filter(g=>g.tipo==="Indispensable"&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
+  const discrT  = filtrados.filter(g=>g.tipo==="Discrecional" &&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0);
   const presupCompMes = presupComp[mk] || {};
   const totalPresupComp = Object.values(presupCompMes).reduce((s,v)=>s+v,0);
   const totalPresup = Object.values(presupMes).reduce((s,v)=>s+v,0) + Math.round(totalPresupComp/2);
@@ -1213,7 +1212,7 @@ ${(()=>{
 
   const porCat = catsSorted.map(c=>({
     ...c,
-    total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+(g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto),0),
+    total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0),
     count:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").length,
   })).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
 
@@ -3150,7 +3149,7 @@ ${(()=>{
                         {expanded&&(
                           <div style={{marginTop:10,borderTop:`1px solid ${C.rule}`,paddingTop:8,display:"flex",flexDirection:"column",gap:0}}>
                             {regs.map((g,i)=>{
-                              const montoNet=g.monto_dividir!=null?g.monto-g.monto_dividir:g.monto;
+                              const montoNet=g.monto;
                               const fecha=g.fecha_impacto||g.fecha||"";
                               const [,mm,dd]=(fecha).split("-");
                               return (
