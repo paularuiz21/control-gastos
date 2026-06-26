@@ -738,10 +738,16 @@ function App() {
     }
 
     // 2. Entradas nuevas (nunca sincronizadas)
-    const unsynced = allGC.filter(g => !currentSynced.includes(g.id));
+    const rawUnsynced = allGC.filter(g => !currentSynced.includes(g.id));
+    // Separar: entradas "perdidas" (su gasto personal ya existe con ese id numérico) vs genuinamente nuevas
+    const existingPersonalNumIds = new Set(
+      gastosRef.current.filter(g => typeof g.id === "number").map(g => g.id)
+    );
+    const recoveredSynced = rawUnsynced.filter(g => existingPersonalNumIds.has(g.id));
+    const unsynced        = rawUnsynced.filter(g => !existingPersonalNumIds.has(g.id));
 
     // 3. Entradas ya sincronizadas que pueden haber cambiado
-    const syncedEntries = allGC.filter(g => currentSynced.includes(g.id));
+    const syncedEntries = allGC.filter(g => currentSynced.includes(g.id) || recoveredSynced.some(r=>r.id===g.id));
     const updatesMap    = new Map(syncedEntries.map(g => [g.id, buildFields(g)]));
 
     // Fingerprint para detectar si los datos realmente cambiaron (evita setGastos en cada snapshot)
@@ -749,7 +755,7 @@ function App() {
     const gcChanged     = gcFingerprint !== prevGCFingerprintRef.current;
     prevGCFingerprintRef.current = gcFingerprint;
 
-    if (!deletedIds.size && !unsynced.length && !gcChanged) return;
+    if (!deletedIds.size && !unsynced.length && !recoveredSynced.length && !gcChanged) return;
 
     // Antes de eliminar, mover a papelera los gastos que van a desaparecer
     if (deletedIds.size > 0) {
@@ -792,6 +798,14 @@ function App() {
         }
         return g;
       });
+      // Eliminar gc_ duplicados: si ya existe un gasto personal con el mismo ID numérico, el gc_ sobra
+      const personalNumIds = new Set(result.filter(g => typeof g.id === "number").map(g => g.id));
+      result = result.filter(g => {
+        if (typeof g.id === "string" && g.id.startsWith("gc_")) {
+          return !personalNumIds.has(Number(g.id.slice(3)));
+        }
+        return true;
+      });
       // Agregar gastos de entradas nuevas (sin duplicar IDs que ya existen)
       const existingIds = new Set(result.map(g => g.id));
       const newPersonal = unsynced
@@ -801,11 +815,12 @@ function App() {
     });
 
     // Actualizar lista de sincronizados
-    if (deletedIds.size || unsynced.length) {
-      const newIds       = unsynced.map(g => g.id);
-      const updatedSynced = [...currentSynced.filter(id => !deletedIds.has(id)), ...newIds];
+    if (deletedIds.size || unsynced.length || recoveredSynced.length) {
+      const newIds        = unsynced.map(g => g.id);
+      const recoveredIds  = recoveredSynced.map(g => g.id);
+      const updatedSynced = [...new Set([...currentSynced.filter(id => !deletedIds.has(id)), ...newIds, ...recoveredIds])];
       gastosCompSyncedRef.current = updatedSynced;
-      setGastosCompSynced(s => [...new Set([...s.filter(id=>!deletedIds.has(id)), ...newIds])]);
+      setGastosCompSynced(s => [...new Set([...s.filter(id=>!deletedIds.has(id)), ...newIds, ...recoveredIds])]);
     }
   }, [groupData]);
 
