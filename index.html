@@ -2450,7 +2450,7 @@ ${(()=>{
               style={inp}/>
             {form.tcambio&&form.monto&&(
               <div style={{marginTop:6,fontFamily:sans,fontSize:12,color:C.mid}}>
-                Equivale a {fmtP(parseFloat(form.monto||0)*parseFloat(form.tcambio||0))} ARS
+                Equivale a {fmt(parseFloat(form.monto||0)*parseFloat(form.tcambio||0))} ARS
               </div>
             )}
           </div>
@@ -2500,7 +2500,7 @@ ${(()=>{
             )}
             {form.monto_dividir && (
               <div style={{marginTop:9,padding:"9px 13px",background:C.bg,borderRadius:7,fontFamily:serif,fontSize:22,color:C.ink,fontWeight:900}}>
-                Tu parte: {fmtP(montoFinal())}
+                Tu parte: {fmt(montoFinal())}
               </div>
             )}
             {groupId && (
@@ -2687,16 +2687,16 @@ ${(()=>{
                               {info.cerro?`! ${info.mes}`:info.mes}
                             </span>
                           )}
-                          {g.monto_dividir&&<span style={{fontFamily:sans,fontSize:11,color:C.blue}}>Total: {fmtP(g.monto_dividir)}</span>}
+                          {g.monto_dividir&&<span style={{fontFamily:sans,fontSize:11,color:C.blue}}>Total: {fmt(g.monto_dividir)}</span>}
                         </div>
                       </div>
                       <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                         <div style={{textAlign:"right"}}>
                           <div style={{fontFamily:serif,fontSize:18,fontWeight:900,color:g.tipo_mov==="Ingreso"?C.green:(g.tipo_mov==="Ahorro"?C.blue:C.red)}}>
-                            {g.tipo_mov==="Ingreso"?"+":"−"}{fmtP(g.monto)}
+                            {g.tipo_mov==="Ingreso"?"+":"−"}{fmt(g.monto)}
                           </div>
                           {g.moneda==="USD"&&g.monto_original&&(
-                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>{fmtUSD_P(g.monto_original)}</div>
+                            <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>{fmtUSD(g.monto_original)}</div>
                           )}
                         </div>
                         <div style={{display:"flex",flexDirection:"column",gap:4}}>
@@ -3172,7 +3172,7 @@ ${(()=>{
                                   <span style={{fontFamily:sans,fontSize:10,color:C.mid,flexShrink:0,width:28}}>{dd}/{mm}</span>
                                   <span style={{flex:1,fontFamily:sans,fontSize:12,color:C.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.observacion||label}</span>
                                   {g.monto_dividir!=null&&<span style={{fontFamily:sans,fontSize:9,color:C.comp,flexShrink:0}}>compartido</span>}
-                                  <span style={{fontFamily:serif,fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{fmtP(montoNet)}</span>
+                                  <span style={{fontFamily:serif,fontSize:12,fontWeight:700,color:C.red,flexShrink:0}}>{fmt(montoNet)}</span>
                                 </div>
                               );
                             })}
@@ -3571,13 +3571,13 @@ ${(()=>{
                                 </span>
                               ) : (
                                 <span style={{fontFamily:sans,fontSize:9,fontWeight:700,padding:"2px 6px",borderRadius:4,background:isPayer?"#F0FBF5":"#FFF5F5",color:isPayer?C.green:C.red}}>
-                                  {isPayer?`te deben ${fmtP(item.montoOtro)}`:`debés ${fmtP(item.montoOtro)}`}
+                                  {isPayer?`te deben ${fmt(item.montoOtro)}`:`debés ${fmt(item.montoOtro)}`}
                                 </span>
                               )}
                             </div>
                           </div>
                           <div style={{textAlign:"right",flexShrink:0}}>
-                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmtP(item.monto)}</div>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.comp}}>{fmt(item.monto)}</div>
                             <div style={{fontFamily:sans,fontSize:10,color:C.mid}}>total</div>
                           </div>
                         </div>
@@ -3602,7 +3602,7 @@ ${(()=>{
                             </div>
                           </div>
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
-                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmtP(item.monto)}</div>
+                            <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmt(item.monto)}</div>
                             <button onClick={()=>{
                               const newP=pagos.filter(p=>p.id!==item.id);
                               fbDb.collection("groups").doc(groupId).update({pagos:newP});
