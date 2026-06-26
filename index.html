@@ -553,7 +553,8 @@ function App() {
   const [recurPinnedCRaw, setRecurPinnedCRaw] = useState(()=>load("v1_recur_pinned_c", null));
   const [recurEdit,  setRecurEdit]  = useState(false);
   const [recurEditC, setRecurEditC] = useState(false);
-  const [catExpandidas, setCatExpandidas] = useState(new Set());
+  const [catExpandidas,     setCatExpandidas]     = useState(new Set());
+  const [catExpandidasComp, setCatExpandidasComp] = useState(new Set());
 
   /* ── GROUP STATE ── */
   const [groupId,           setGroupId]           = useState(null);
@@ -2977,52 +2978,77 @@ ${(()=>{
                     </div>
                   </div>
                 )}
-                {/* Desglose por categoría — todas las que tienen presupuesto o gasto compartido */}
-                {(() => {
-                  const catsComp = cats.filter(c => {
-                    const tienePresup = (presupCompMes[c.id]||0) > 0;
-                    const tieneGasto  = gastosComp.some(g=>g.gasto===c.id);
-                    return tienePresup || tieneGasto;
-                  });
-                  if(catsComp.length===0) return null;
+              </div>
+
+              {/* Tarjetas expandibles por categoría — Compartido */}
+              {(()=>{
+                const catsC = cats.filter(c => {
+                  const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+montoTotalComp(g),0);
+                  return gc > 0 || (presupCompMes[c.id]||0) > 0;
+                }).map(c => {
+                  const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+montoTotalComp(g),0);
+                  return {...c, gc};
+                }).filter(c=>c.gc>0).sort((a,b)=>b.gc-a.gc);
+                if (!catsC.length) return null;
+                const partner = (groupData?.members||[]).find(m=>m.uid!==authUser?.uid);
+                const partnerName = partner?.displayName || "Partner";
+                return catsC.map(({id,label,tipo,icon,gc})=>{
+                  const pc = presupCompMes[id]||0;
+                  const dif = gc - pc;
+                  const over = pc===0 || dif>0;
+                  const barW = pc>0 ? Math.min((gc/pc)*100,100) : 100;
+                  const barCol = over ? C.red : "#3E6BA8";
+                  const isI = tipo==="Indispensable";
+                  const expanded = catExpandidasComp.has(id);
+                  const toggleCat = () => setCatExpandidasComp(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
+                  const regs = gastosComp.filter(g=>g.gasto===id).sort((a,b)=>(b.fecha_impacto||b.fecha||"").localeCompare(a.fecha_impacto||a.fecha||""));
                   return (
-                    <div style={{marginTop:10, display:"flex", flexDirection:"column", gap:0}}>
-                      {catsComp.map(c=>{
-                        const pc = presupCompMes[c.id]||0;
-                        const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+montoTotalComp(g),0);
-                        const dif = gc - pc;
-                        const over = pc>0 && dif>0;
-                        const isI = c.tipo==="Indispensable";
-                        return (
-                          <div key={c.id} style={{padding:"8px 0", borderTop:`1px solid ${C.rule}`}}>
-                            <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:4}}>
-                              <div style={{display:"flex", alignItems:"center", gap:7}}>
-                                <div style={{width:22, height:22, borderRadius:5, background:isI?C.tagI:C.tagD, display:"flex", alignItems:"center", justifyContent:"center"}}>
-                                  <Icon name={c.icon||"star"} size={11} color={isI?C.accent:"#3E6BA8"}/>
-                                </div>
-                                <span style={{fontFamily:sans, fontWeight:600, fontSize:12, color:C.ink}}>{c.label}</span>
+                    <div key={id} style={{...card, marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                        <div style={{width:32,height:32,borderRadius:7,flexShrink:0,background:isI?C.tagI:C.tagD,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <Icon name={icon||"star"} size={14} color={isI?C.accent:"#3E6BA8"}/>
+                        </div>
+                        <span style={{flex:1,fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink}}>{label}</span>
+                        <span style={{fontFamily:serif,fontSize:18,fontWeight:900,color:"#7C3AED",marginRight:6}}>{fmtP(gc)}</span>
+                        <button onClick={toggleCat} style={{background:expanded?C.dark:C.bg,border:`1px solid ${C.rule}`,borderRadius:6,width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0,color:expanded?"#fff":C.mid,fontWeight:700,fontSize:14,lineHeight:1}}>
+                          {expanded?"−":"+"}
+                        </button>
+                      </div>
+                      <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
+                        <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
+                        <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
+                          {regs.length} registro{regs.length!==1?"s":""}
+                          {pc>0&&<span style={{marginLeft:6}}>· Presup: {fmtP(pc)}</span>}
+                        </span>
+                        {pc>0
+                          ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:"#3E6BA8"}}>{over?"+":""}{fmtP(dif)}</span>
+                          :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
+                        }
+                      </div>
+                      {expanded&&(
+                        <div style={{marginTop:10,borderTop:`1px solid ${C.rule}`,paddingTop:8,display:"flex",flexDirection:"column",gap:0}}>
+                          {regs.map((g,i)=>{
+                            const total = montoTotalComp(g);
+                            const pagoParter = g.via==="Balance";
+                            const fecha = g.fecha_impacto||g.fecha||"";
+                            const [,mm,dd] = (fecha).split("-");
+                            return (
+                              <div key={g.id||i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:i<regs.length-1?`1px solid ${C.rule}`:"none"}}>
+                                <span style={{fontFamily:sans,fontSize:10,color:C.mid,flexShrink:0,width:28}}>{dd}/{mm}</span>
+                                <span style={{flex:1,fontFamily:sans,fontSize:12,color:C.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{g.observacion||label}</span>
+                                <span style={{fontFamily:sans,fontSize:9,color:pagoParter?"#3E6BA8":C.comp,flexShrink:0}}>{pagoParter?partnerName:"Yo"}</span>
+                                <span style={{fontFamily:serif,fontSize:12,fontWeight:700,color:"#7C3AED",flexShrink:0}}>{fmt(total)}</span>
                               </div>
-                              <div style={{textAlign:"right"}}>
-                                <span style={{fontFamily:serif, fontSize:14, fontWeight:900, color:gc>0?"#7C3AED":C.mid}}>{gc>0?fmtP(gc):"—"}</span>
-                                {pc>0
-                                  ? <div style={{fontFamily:sans, fontSize:10, color:over?C.red:C.green, fontWeight:700}}>{over?"+":""}{fmtP(dif)} vs {fmtP(pc)}</div>
-                                  : gc>0 && <div style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</div>
-                                }
-                              </div>
-                            </div>
-                            {pc>0 && (
-                              <div style={{height:3, background:C.bg, borderRadius:2, overflow:"hidden"}}>
-                                <div style={{width:`${Math.min((gc/pc)*100,100)}%`, height:"100%", background:over?C.red:"#3E6BA8"}}/>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
-                })()}
-
-              </div>
+                });
+              })()}
 
               {false && (()=>{
                 const gcList=groupData?.gastosComp||[];
