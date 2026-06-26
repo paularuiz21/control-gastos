@@ -2995,9 +2995,11 @@ ${(()=>{
                 return catsC.map(({id,label,tipo,icon,gc})=>{
                   const pc = presupCompMes[id]||0;
                   const dif = gc - pc;
-                  const over = pc===0 || dif>0;
-                  const barW = pc>0 ? Math.min((gc/pc)*100,100) : 100;
-                  const barCol = over ? C.red : "#3E6BA8";
+                  const pctComp = pc>0 ? Math.round((gc/pc)*100) : 100;
+                  const isFlatC = pc>0 && pctComp>=95 && pctComp<=105;
+                  const isOverC = pc===0 || pctComp>105;
+                  const barW = pc>0 ? Math.min(pctComp,100) : 100;
+                  const barCol = isOverC ? C.red : isFlatC ? "#3E6BA8" : C.green;
                   const isI = tipo==="Indispensable";
                   const expanded = catExpandidasComp.has(id);
                   const toggleCat = () => setCatExpandidasComp(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
@@ -3014,17 +3016,22 @@ ${(()=>{
                           {expanded?"−":"+"}
                         </button>
                       </div>
-                      <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
-                        <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
+                      <div style={{position:"relative",height:4,background:C.bg,borderRadius:2,overflow:"visible"}}>
+                        <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol,borderRadius:2}}/>
+                        {isOverC&&pc>0&&<div style={{position:"absolute",right:-5,top:-3,width:10,height:10,background:C.red,borderRadius:"50%",border:`2px solid ${C.bg}`}}/>}
                       </div>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
                         <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
                           {regs.length} registro{regs.length!==1?"s":""}
                           {pc>0&&<span style={{marginLeft:6}}>· Presup: {fmtP(pc)}</span>}
                         </span>
-                        {pc>0
-                          ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:"#3E6BA8"}}>{over?"+":""}{fmtP(dif)}</span>
-                          :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
+                        {pc===0
+                          ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
+                          :isOverC
+                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Excedido +{pctComp-100}% · +{fmtP(dif)}</span>
+                            :isFlatC
+                              ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#3E6BA8"}}>Flat {pctComp}% · {dif<0?"−":"+"}${fmtP(Math.abs(dif))}</span>
+                              :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.green}}>te sobran {fmtP(Math.abs(dif))}</span>
                         }
                       </div>
                       {expanded&&(
@@ -3152,13 +3159,14 @@ ${(()=>{
               ) : (
                 <div style={{display:"flex",flexDirection:"column",gap:7}}>
                   {porCat.map(({id,label,tipo,icon,total,count})=>{
-                    const pct=Math.round((total/totalGNet)*100);
                     const isI=tipo==="Indispensable";
                     const presupCat=(presupMes[id]||0) + Math.round((presupCompMes[id]||0)/2);
                     const difCat=total-presupCat;
-                    const over=presupCat===0||difCat>0;
-                    const barW=presupCat>0?Math.min((total/presupCat)*100,100):100;
-                    const barCol=over?C.red:C.green;
+                    const pctCat=presupCat>0?Math.round((total/presupCat)*100):100;
+                    const isFlat=presupCat>0&&pctCat>=95&&pctCat<=105;
+                    const isOver=presupCat===0||pctCat>105;
+                    const barW=presupCat>0?Math.min(pctCat,100):100;
+                    const barCol=isOver?C.red:isFlat?"#3E6BA8":C.green;
                     const expanded=catExpandidas.has(id);
                     const toggleCat=()=>setCatExpandidas(prev=>{const n=new Set(prev);n.has(id)?n.delete(id):n.add(id);return n;});
                     const regs=filtrados.filter(g=>g.gasto===id&&g.tipo_mov==="Gasto").sort((a,b)=>(b.fecha_impacto||b.fecha||"").localeCompare(a.fecha_impacto||a.fecha||""));
@@ -3174,17 +3182,22 @@ ${(()=>{
                             {expanded?"−":"+"}
                           </button>
                         </div>
-                        <div style={{height:4,background:C.bg,borderRadius:2,overflow:"hidden"}}>
-                          <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol}}/>
+                        <div style={{position:"relative",height:4,background:C.bg,borderRadius:2,overflow:"visible"}}>
+                          <div style={{width:`${barW}%`,height:"100%",transition:"width .4s",background:barCol,borderRadius:2}}/>
+                          {isOver&&presupCat>0&&<div style={{position:"absolute",right:-5,top:-3,width:10,height:10,background:C.red,borderRadius:"50%",border:`2px solid ${C.bg}`}}/>}
                         </div>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:5}}>
                           <span style={{fontFamily:sans,fontSize:10,color:C.mid}}>
                             {count} registro{count!==1?"s":""}
                             {presupCat>0&&<span style={{marginLeft:6}}>· Presup: {fmtP(presupCat)}{(presupCompMes[id]||0)>0&&(presupMes[id]||0)===0&&<span style={{color:C.comp}}> (compartido)</span>}</span>}
                           </span>
-                          {presupCat>0
-                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:over?C.red:C.green}}>{over?"+":""}{fmtP(difCat)}</span>
-                            :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
+                          {presupCat===0
+                            ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Sin presupuesto</span>
+                            :isOver
+                              ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.red}}>Excedido +{pctCat-100}% · +{fmtP(difCat)}</span>
+                              :isFlat
+                                ?<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:"#3E6BA8"}}>Flat {pctCat}% · {difCat<0?"−":"+"}${fmtP(Math.abs(difCat))}</span>
+                                :<span style={{fontFamily:sans,fontSize:10,fontWeight:700,color:C.green}}>te sobran {fmtP(Math.abs(difCat))}</span>
                           }
                         </div>
                         {expanded&&(
