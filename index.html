@@ -1135,9 +1135,10 @@ ${(()=>{
     if (g) {
       setUndoData({gasto:g, gcEntry, gcId});
       undoTimerRef.current = setTimeout(()=>setUndoData(null), 5000);
-      // Guardar en papelera (30 días)
+      // Guardar en papelera (30 días). Incluye gcEntry/gcId para poder
+      // re-crear la entrada del Balance al restaurar (si era compartido).
       setGastosEliminados(prev => [
-        {gasto:g, deletedAt:Date.now(), reason:"manual"},
+        {gasto:g, gcEntry, gcId, deletedAt:Date.now(), reason:"manual"},
         ...prev.filter(e => e.gasto.id !== id)
       ]);
     }
@@ -3876,6 +3877,14 @@ ${(()=>{
                                   </div>
                                   <button onClick={()=>{
                                     setGastos(gs=>[{...g},  ...gs]);
+                                    // Si era compartido, re-crear la entrada en el grupo (Balance)
+                                    if (entry.gcEntry && entry.gcId && groupId && fbDb && groupData) {
+                                      fbDb.collection("groups").doc(groupId).update({
+                                        gastosComp: firebase.firestore.FieldValue.arrayUnion(entry.gcEntry)
+                                      });
+                                      gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, entry.gcId];
+                                      setGastosCompSynced(s=>[...s, entry.gcId]);
+                                    }
                                     setGastosEliminados(prev=>prev.filter(e=>!(e.gasto.id===g.id && e.deletedAt===entry.deletedAt)));
                                   }} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"none",background:C.green,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer"}}>
                                     Restaurar
