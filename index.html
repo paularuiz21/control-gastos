@@ -303,7 +303,12 @@ const migrateGasto = (g) => ({
 const ICON_OPTIONS = ["home","building","receipt","cart","delivery","utensils","tv","music","wine","gift","plane","paw","shirt","card","clock","heart","grad","wallet","cash","transfer","star","zap","barchart","salary"];
 
 /* ── HELPERS ──────────────────────────────────────────────── */
-const today = () => new Date().toISOString().split("T")[0];
+// Fecha de HOY en hora LOCAL (no UTC). Usar toISOString() daría la fecha de
+// Greenwich, que en Argentina (UTC-3) se adelanta al día siguiente desde las 21hs.
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+};
 
 const getCierre = (t, fecha) => {
   try {
@@ -548,7 +553,7 @@ function App() {
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem("v1_anthropic_key") || "");
   const [scanLoading,  setScanLoading]  = useState(false);
   const [privado,    setPrivado]    = useState(false);
-  const [balMesesAb, setBalMesesAb] = useState(()=>new Set([new Date().toISOString().slice(0,7)]));
+  const [balMesesAb, setBalMesesAb] = useState(()=>new Set([today().slice(0,7)]));
   const [recurPinnedRaw,  setRecurPinnedRaw]  = useState(()=>load("v1_recur_pinned",  null));
   const [recurPinnedCRaw, setRecurPinnedCRaw] = useState(()=>load("v1_recur_pinned_c", null));
   const [recurEdit,  setRecurEdit]  = useState(false);
@@ -1165,7 +1170,7 @@ ${(()=>{
 
   const calcBalance = (gastosComp, pagos, myUid) => {
     if (!myUid) return 0;
-    const hoy = new Date().toISOString().split("T")[0];
+    const hoy = today();
     let b = 0;
     (gastosComp||[]).forEach(g => {
       const fi = fiComp(g);
@@ -3497,7 +3502,9 @@ ${(()=>{
           const balance     = calcBalance(gastosComp, pagos, myUid);
           const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
           const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
-          const hoyStr      = new Date().toISOString().split("T")[0];
+          const hoyStr      = today();
+          // Mes de impacto del item (los pagos/transferencias no tienen impacto: usan su fecha)
+          const ymImpacto   = item => item.tipo==="pago" ? (item.fecha||"").slice(0,7) : fiComp(item).slice(0,7);
           const esActivo    = item => item.tipo==="pago" || fiComp(item) <= hoyStr;
           const historia    = [
             ...gastosComp.map(g=>({...g,tipo:"gasto"})),
@@ -3652,9 +3659,12 @@ ${(()=>{
                         </div>
                       );
                   };
+                  // Agrupar los ACTIVOS por mes de IMPACTO (igual que Movimientos y Resumen).
+                  // Así, cuando un gasto de tarjeta llega a su mes de impacto, forma su
+                  // propio grupo (ej. JULIO arriba de junio) en vez de caer en el mes de pago.
                   const gruposMes = {};
                   historiaActiva.forEach(item => {
-                    const ym = (item.fecha||"").slice(0,7);
+                    const ym = ymImpacto(item);
                     if (!gruposMes[ym]) gruposMes[ym] = [];
                     gruposMes[ym].push(item);
                   });
