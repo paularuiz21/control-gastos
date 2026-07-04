@@ -139,12 +139,18 @@ const fsJoinGroup = async (token, uid, displayName, email) => {
     if ((data.memberUids||[]).includes(uid)) return {groupId: doc.id, ...data};
     if ((data.memberUids||[]).length >= 2) return "full";
     const newMember = {uid, displayName: displayName||email||"Usuario", email: email||""};
+    // arrayUnion en vez de set(): agrega el miembro sin reescribir el doc entero.
+    // Con set(), si el otro miembro cargaba un gasto en simultáneo, se pisaba
+    // todo gastosComp con la copia vieja leída arriba.
+    await doc.ref.update({
+      memberUids: firebase.firestore.FieldValue.arrayUnion(uid),
+      members:    firebase.firestore.FieldValue.arrayUnion(newMember),
+    });
     const updated = {
       ...data,
       memberUids: [...(data.memberUids||[]), uid],
       members:    [...(data.members||[]),    newMember],
     };
-    await doc.ref.set(updated);
     return {groupId: doc.id, ...updated};
   } catch(e) { console.warn("fsJoinGroup error:", e); return null; }
 };
@@ -1038,8 +1044,10 @@ ${(()=>{
             via: otraPago ? "Balance" : form.via,
             tarjeta: otraPago ? null : (form.tarjeta||null),
           };
-          const newGC = (groupData.gastosComp||[]).map(g=>g.id===numId?updatedGC:g);
-          fbDb.collection("groups").doc(groupId).update({gastosComp:newGC});
+          // Reemplazo atómico por elemento (remove + union) en vez de subir el
+          // array entero: no pisa cambios que el partner haya hecho en simultáneo.
+          fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(gcEntry)});
+          fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(updatedGC)});
         }
       }
       setEditando(null); setModal(null);
@@ -1155,9 +1163,9 @@ ${(()=>{
       ]);
     }
     setGastos(gs=>gs.filter(x=>x.id!==id));
-    if (gcId && groupId && fbDb && groupData) {
-      const newGC = (groupData.gastosComp||[]).filter(x=>x.id!==gcId);
-      fbDb.collection("groups").doc(groupId).update({gastosComp:newGC});
+    if (gcId && gcEntry && groupId && fbDb && groupData) {
+      // arrayRemove: borra solo esta entrada, sin pisar cambios simultáneos del partner
+      fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(gcEntry)});
       gastosCompSyncedRef.current = gastosCompSyncedRef.current.filter(x=>x!==gcId);
       setGastosCompSynced(s=>s.filter(x=>x!==gcId));
     }
@@ -1885,8 +1893,11 @@ ${(()=>{
         via: isPayer ? fg.via : null, tarjeta: isPayer ? (fg.tarjeta||null) : null,
       };
       if (editItem) {
-        const newG = (groupData.gastosComp||[]).map(g=>g.id===editItem.id?nuevo:g);
-        fbDb.collection("groups").doc(groupId).update({gastosComp:newG});
+        // Remove + union por elemento: no pisa cambios simultáneos del partner.
+        // Se busca la entrada original exacta (editItem puede ser una copia).
+        const orig = (groupData.gastosComp||[]).find(g=>g.id===editItem.id);
+        if (orig) fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(orig)});
+        fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(nuevo)});
       } else {
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(nuevo)
@@ -3494,9 +3505,12 @@ ${(()=>{
             if (!window.confirm("¿Salir del grupo compartido? Tus datos personales no se borran.")) return;
             try {
               if (fbDb && groupId) {
-                const newMembers = (groupData?.members||[]).filter(m=>m.uid!==authUser?.uid);
-                const newUids    = (groupData?.memberUids||[]).filter(id=>id!==authUser?.uid);
-                await fbDb.collection("groups").doc(groupId).update({members:newMembers, memberUids:newUids});
+                // arrayRemove: me saco a mí sin reescribir las listas enteras
+                const myMember = (groupData?.members||[]).find(m=>m.uid===authUser?.uid);
+                await fbDb.collection("groups").doc(groupId).update({
+                  memberUids: firebase.firestore.FieldValue.arrayRemove(authUser?.uid||""),
+                  ...(myMember ? {members: firebase.firestore.FieldValue.arrayRemove(myMember)} : {}),
+                });
                 // Borrar groupId explícitamente del doc del usuario (fsSave omite null)
                 await fbDb.collection("users").doc(authUser.uid).update({
                   groupId: firebase.firestore.FieldValue.delete()
@@ -3672,8 +3686,8 @@ ${(()=>{
                                   ...prev
                                 ]);
                               }
-                              const newP=pagos.filter(p=>p.id!==item.id);
-                              fbDb.collection("groups").doc(groupId).update({pagos:newP});
+                              // arrayRemove: borra solo este pago, sin pisar cambios simultáneos
+                              if (pagoOriginal) fbDb.collection("groups").doc(groupId).update({pagos: firebase.firestore.FieldValue.arrayRemove(pagoOriginal)});
                             }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
                               <Icon name="trash" size={13} color={C.mid}/>
                             </button>
