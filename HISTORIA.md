@@ -131,19 +131,130 @@ Se reconstruyó la app desde cero con todas las mejoras acumuladas:
 
 ---
 
+---
+
+### Funcionalidad 3 — Gastos compartidos entre dos personas
+
+**Qué resuelve:** Paula y Leandro comparten muchos gastos del hogar — expensas, supermercado, salidas. Antes cada uno lo registraba por separado o se perdía el rastro de quién pagó qué y cuánto se debían.
+
+**Cómo funciona:**
+- Al cargar un gasto, se puede marcar como "compartido" e indicar si lo pagó Paula o Leandro
+- La app divide el monto automáticamente (por defecto al 50%) y registra la parte de cada uno
+- Se lleva un saldo en tiempo real: cuánto le debe uno al otro, mes por mes
+- Cuando alguien salda la deuda, se registra como pago y el saldo se actualiza
+
+**Cómo se hizo:** se creó un espacio compartido en Firestore donde ambos usuarios tienen acceso. Cada gasto compartido queda guardado ahí, y la app de cada uno lo sincroniza automáticamente mostrando solo su parte proporcional. No hace falta que estén los dos conectados al mismo tiempo.
+
+---
+
+### Funcionalidad 4 — Carga desde foto para gastos compartidos
+
+La funcionalidad de foto (que ya existía para gastos personales) se extendió también a los gastos compartidos. Si Leandro paga el supermercado y saca foto del ticket, la app pre-completa el formulario y registra su parte automáticamente.
+
+---
+
+### Funcionalidad 5 — ClearFigures: nuevo nombre y dominio propio
+
+**Qué cambió:** la app dejó de llamarse "Control de Gastos" y pasó a llamarse **ClearFigures**. Se registró el dominio `clearfigures.app` — ahora la app vive en esa dirección en lugar del link técnico de GitHub.
+
+**Por qué:** tener un dominio propio resolvió también el problema del popup de login de Google, que antes no podía mostrar el nombre correcto sin dominio registrado. Además le da a la app una identidad más propia.
+
+**Qué más cambió visualmente:**
+- Se diseñó un logo nuevo: tres barras apiladas bicolores que representan a dos personas que comparten gastos. El ícono funciona como acceso directo en el celular.
+- La app se puede **instalar como aplicación nativa** desde Safari en iPhone o desde Chrome en Android — aparece en la pantalla de inicio igual que una app descargada de la App Store, sin necesidad de publicarla en ninguna tienda.
+
+---
+
+### Mejora — Resumen rediseñado
+
+**Qué mejoró:** la pantalla de Resumen era difícil de leer, con demasiada información a la vez y números que no siempre cuadraban.
+
+**Qué se hizo:**
+- Los indicadores de Indispensable/Discrecional pasaron de ser tarjetas grandes a chips pequeños, solo para referencia rápida
+- Se quitó la sección de "gastos recurrentes" del resumen (era confusa y poco útil)
+- Cada categoría ahora tiene un botón **"+"** que se puede expandir para ver el detalle de cada gasto individual, con fecha y monto. Al expandir, los números siempre coinciden exactamente con lo que muestra la pestaña Movimientos
+- Se corrigió un error donde los gastos compartidos aparecían con signo negativo en el detalle, haciendo que la suma diera cero
+
+---
+
+### Corrección — Configuración sin scroll
+
+**Qué pasaba:** al abrir la pantalla de Configuración en un celular, el contenido quedaba cortado y no se podía hacer scroll para ver las opciones de abajo (la clave de API de fotos, por ejemplo).
+
+**Cómo se resolvió:** se corrigió el panel de configuración para que tenga scroll cuando el contenido no entra en pantalla.
+
+---
+
+### Corrección — Botón de foto desaparecía al borrar la clave de API
+
+**Qué pasaba:** si la usuaria borraba su clave de API de Anthropic (necesaria para la carga por foto), el botón "Cargar desde foto" desaparecía del formulario.
+
+**Cómo se resolvió:** ahora el botón siempre está visible. Si no hay clave configurada, al tocarlo lleva directamente a la pantalla de Configuración para agregarla.
+
+---
+
+### Corrección — El balance se adelantaba 3 horas (bug de zona horaria)
+
+**Qué pasaba:** la noche del 30 de junio, cerca de las 22hs, el total del Balance saltó de golpe a un número mucho más alto y los gastos "en cola" (los que impactan el mes siguiente) desaparecieron — como si ya fuera 1 de julio, cuando en Argentina todavía faltaban dos horas.
+
+**Por qué pasaba:** para saber "qué día es hoy", la app leía el reloj en horario de Greenwich (UTC), que va 3 horas adelantado respecto de Argentina. Desde las 21hs de acá, para la app ya era el día siguiente. La mayoría de las noches el error era invisible, pero en el cambio de mes movía toda la cola de gastos pendientes de golpe.
+
+**Cómo se resolvió:** se corrigió la app para que lea la fecha en hora local. De paso quedó arreglada también la fecha por defecto al cargar un gasto de noche (proponía la fecha de mañana).
+
+---
+
+### Mejora — El Balance agrupa por mes de impacto
+
+**Qué mejoró:** al destaparse el bug anterior, apareció una inconsistencia que siempre había estado oculta: el detalle del Balance agrupaba los gastos por la fecha en que se **pagaron**, mientras que Movimientos y Resumen agrupan por el mes en que **impactan** (clave para los gastos con tarjeta). Al llegar julio, los gastos de tarjeta que impactaban ese mes se dispersaban entre mayo y junio en vez de formar su propio grupo.
+
+**Cómo quedó:** ahora el Balance agrupa igual que el resto de la app. Cuando un gasto llega a su mes de impacto, forma un grupo nuevo arriba del mes anterior (ej. JULIO arriba de JUNIO). La cola de "Pendiente — activa cuando llegue el mes de impacto" sigue funcionando igual que siempre.
+
+---
+
+### Corrección — Restaurar desde la papelera no devolvía el gasto al Balance
+
+**Qué pasaba:** al restaurar un gasto compartido desde la papelera, volvía a aparecer en Movimientos pero no en el Balance. El gasto quedaba "huérfano": la deuda con la otra persona no se recalculaba.
+
+**Por qué pasaba:** un gasto compartido vive en dos lugares a la vez — el registro personal y la entrada en el espacio compartido del grupo. Al borrar, la app guardaba en la papelera solo el registro personal; la entrada del grupo se perdía. Al restaurar, no había con qué reconstruirla.
+
+**Cómo se resolvió (en dos etapas):**
+1. La papelera ahora guarda también la entrada del grupo. Restaurar re-crea las dos partes: Movimientos y Balance quedan consistentes para ambos usuarios.
+2. Lo mismo para el caso inverso: si la **otra persona** borra un gasto compartido, la copia que va a tu papelera también guarda lo necesario para restaurarlo completo.
+
+**Aviso:** los gastos borrados antes de esta corrección no tienen guardada la entrada del grupo — restaurarlos solo los devuelve a Movimientos; hay que recargarlos a mano.
+
+---
+
+### Mejora — Eliminar transferencias ahora es seguro
+
+**Qué pasaba:** el botón de eliminar una transferencia en el Balance borraba directo: sin confirmación, sin poder deshacer y sin pasar por la papelera. Un toque accidental significaba un pago perdido para siempre, y el balance cambiaba silenciosamente para los dos.
+
+**Cómo se resolvió:** ahora pide confirmación antes de borrar, y la transferencia va a la papelera (30 días), desde donde se puede restaurar.
+
+---
+
+## Análisis de robustez — temas identificados a futuro
+
+De una revisión general del código (julio 2026) quedaron identificados, sin implementar aún:
+
+- **Ediciones simultáneas:** si dos personas editan o borran gastos compartidos al mismo tiempo, una puede pisar el cambio de la otra sin darse cuenta. La solución de fondo es cambiar cómo se guardan los gastos del grupo en la base de datos.
+- **Múltiples grupos de balance:** hoy la app soporta un solo grupo de exactamente 2 personas. Tener varios grupos (ej. uno con la pareja y otro con hermanas) requiere cambios medianos; grupos de 3+ personas requieren rediseñar el cálculo del balance.
+- **Gasto solo-Balance:** poder cargar algo que genere deuda en el balance pero no aparezca como gasto propio en Movimientos (ej. adelantarle plata a alguien).
+
+---
+
 ## Próximas funcionalidades
 
 | Funcionalidad | Descripción |
 |---|---|
-| **Balance compartido** | Registro de gastos entre dos personas con división configurable, saldo en tiempo real e historial de pagos |
-| **PIN de seguridad** | La app pide un código antes de mostrar cualquier dato |
-
-### Pendiente de definición
-
-| Tema | Estado |
-|---|---|
-| Nombre en el popup de login de Google | Requiere dominio propio (ej: `controldegastos.app`) |
+| **Comparativa con mes anterior** | En el resumen, mostrar el delta respecto al mismo mes del año anterior (ej. +12% vs mayo 2025) |
+| **Cierre de mes** | Al entrar en un mes nuevo, la app propone cerrar el anterior con un resumen y archivarlo |
+| **Historial anual** | Archivo de gastos de años anteriores, con posibilidad de consulta |
+| **Balance: meses colapsados** | En la vista de balance, los meses anteriores arrancan minimizados; solo el mes actual aparece expandido |
+| **Onboarding animado** | Intro tipo video al entrar por primera vez (en revisión, sin publicar) |
+| **Múltiples grupos de balance** | Poder tener un balance con la pareja y otro con otras personas (ej. hermanas) |
+| **Gasto solo-Balance** | Cargar deudas que no son gastos propios (ej. adelantos de plata) |
 
 ---
 
-*Documento actualizado: mayo 2026*
+*Documento actualizado: julio 2026*
