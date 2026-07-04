@@ -577,6 +577,7 @@ function App() {
   const gastosCompSyncedRef  = React.useRef([]);
   const prevGCFingerprintRef = React.useRef("");
   const prevGCIdsRef         = React.useRef(new Set()); // IDs vistos en el último snapshot válido
+  const prevGCEntriesRef     = React.useRef(new Map()); // id → entrada gastosComp del último snapshot (para papelera)
   useEffect(() => { gastosCompSyncedRef.current = gastosCompSynced; }, [gastosCompSynced]);
   const [undoData,   setUndoData]   = useState(null); // {gasto, gcEntry?, gcId?}
   const undoTimerRef = React.useRef(null);
@@ -738,9 +739,13 @@ function App() {
     const deletedIds = new Set(
       currentSynced.filter(id => prevGCIdsRef.current.has(id) && !currentGCIds.has(id))
     );
+    // Capturar las entradas del snapshot ANTERIOR antes de pisarlas: son las que
+    // necesita la papelera para poder restaurar al Balance una entrada borrada.
+    const prevEntriesMap = prevGCEntriesRef.current;
     // Actualizar los IDs vistos (solo si el snapshot tiene datos o nunca tuvimos datos)
     if (allGC.length > 0 || prevGCIdsRef.current.size === 0) {
       prevGCIdsRef.current = currentGCIds;
+      prevGCEntriesRef.current = new Map(allGC.map(g => [g.id, g]));
     }
 
     // 2. Entradas nuevas (nunca sincronizadas)
@@ -773,8 +778,15 @@ function App() {
       if (toDelete.length > 0) {
         const now = Date.now();
         setGastosEliminados(prev => [
-          ...toDelete.map(g => ({gasto:g, deletedAt:now, reason:"sync_auto"})),
-          ...prev.filter(e => !toDelete.some(d => d.id === e.gasto.id))
+          // Guardar también gcEntry/gcId (desde el snapshot anterior) para que
+          // "Restaurar" pueda re-crear la entrada en el Balance del grupo.
+          ...toDelete.map(g => {
+            const numId = typeof g.id === "string" && g.id.startsWith("gc_")
+              ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
+            const gcEntry = numId ? (prevEntriesMap.get(numId) || null) : null;
+            return {gasto:g, gcEntry, gcId: gcEntry ? numId : null, deletedAt:now, reason:"sync_auto"};
+          }),
+          ...prev.filter(e => !toDelete.some(d => d.id === e.gasto?.id))
         ]);
       }
     }
@@ -1139,7 +1151,7 @@ ${(()=>{
       // re-crear la entrada del Balance al restaurar (si era compartido).
       setGastosEliminados(prev => [
         {gasto:g, gcEntry, gcId, deletedAt:Date.now(), reason:"manual"},
-        ...prev.filter(e => e.gasto.id !== id)
+        ...prev.filter(e => e.gasto?.id !== id)
       ]);
     }
     setGastos(gs=>gs.filter(x=>x.id!==id));
@@ -3651,6 +3663,15 @@ ${(()=>{
                           <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
                             <div style={{fontFamily:serif,fontSize:16,fontWeight:900,color:C.green}}>{fmt(item.monto)}</div>
                             <button onClick={()=>{
+                              if (!window.confirm(`¿Eliminar esta transferencia de ${fmt(item.monto)}? Cambia el balance para ambos.`)) return;
+                              // Guardar en papelera (30 días) para poder restaurarla
+                              const pagoOriginal = pagos.find(p=>p.id===item.id);
+                              if (pagoOriginal) {
+                                setGastosEliminados(prev => [
+                                  {pago:pagoOriginal, deletedAt:Date.now(), reason:"manual"},
+                                  ...prev
+                                ]);
+                              }
                               const newP=pagos.filter(p=>p.id!==item.id);
                               fbDb.collection("groups").doc(groupId).update({pagos:newP});
                             }} style={{background:"none",border:"none",cursor:"pointer",padding:2}}>
@@ -3856,11 +3877,43 @@ ${(()=>{
                         {activos
                           .sort((a,b)=>b.deletedAt-a.deletedAt)
                           .map(entry => {
-                            const g   = entry.gasto;
-                            const cat = cats.find(c=>c.id===g.gasto);
-                            const fmt = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—";
+                            const fmtF   = d => d ? new Date(d+"T12:00:00").toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit"}) : "—";
                             const fmtDel = new Date(entry.deletedAt).toLocaleDateString("es-AR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
                             const motivo = entry.reason==="sync_auto" ? "Sync automático" : "Eliminado manualmente";
+                            // ── Entrada de transferencia (pago del Balance) ──
+                            if (entry.pago) {
+                              const p = entry.pago;
+                              return (
+                                <div key={`pago_${p.id}_${entry.deletedAt}`} style={{background:C.paper,borderRadius:8,padding:"9px 11px",border:`1px solid ${C.rule}`}}>
+                                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                                    <div style={{flex:1,minWidth:0}}>
+                                      <div style={{fontFamily:sans,fontWeight:700,fontSize:13,color:C.ink,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                                        Transferencia{p.nota?` · ${p.nota}`:""}
+                                      </div>
+                                      <div style={{fontFamily:sansR,fontSize:11,color:C.mid,marginTop:2}}>
+                                        Balance · {fmtF(p.fecha)} · ${(p.monto||0).toLocaleString("es-AR")}
+                                      </div>
+                                      <div style={{fontFamily:sansR,fontSize:10,color:C.faint,marginTop:1}}>
+                                        {motivo} · {fmtDel}
+                                      </div>
+                                    </div>
+                                    <button onClick={()=>{
+                                      if (groupId && fbDb && groupData && !(groupData.pagos||[]).some(x=>x.id===p.id)) {
+                                        fbDb.collection("groups").doc(groupId).update({
+                                          pagos: firebase.firestore.FieldValue.arrayUnion(p)
+                                        });
+                                      }
+                                      setGastosEliminados(prev=>prev.filter(e=>!(e.pago?.id===p.id && e.deletedAt===entry.deletedAt)));
+                                    }} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"none",background:C.green,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer"}}>
+                                      Restaurar
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+                            // ── Entrada de gasto ──
+                            const g   = entry.gasto;
+                            const cat = cats.find(c=>c.id===g.gasto);
                             return (
                               <div key={`${g.id}_${entry.deletedAt}`} style={{background:C.paper,borderRadius:8,padding:"9px 11px",border:`1px solid ${C.rule}`}}>
                                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
@@ -3869,23 +3922,26 @@ ${(()=>{
                                       {g.observacion||cat?.label||"Sin descripción"}
                                     </div>
                                     <div style={{fontFamily:sansR,fontSize:11,color:C.mid,marginTop:2}}>
-                                      {cat?.label||"—"} · {fmtP(g.fecha)} · ${(g.monto||0).toLocaleString("es-AR")}
+                                      {cat?.label||"—"} · {fmtF(g.fecha)} · ${(g.monto||0).toLocaleString("es-AR")}
                                     </div>
                                     <div style={{fontFamily:sansR,fontSize:10,color:C.faint,marginTop:1}}>
                                       {motivo} · {fmtDel}
                                     </div>
                                   </div>
                                   <button onClick={()=>{
-                                    setGastos(gs=>[{...g},  ...gs]);
-                                    // Si era compartido, re-crear la entrada en el grupo (Balance)
-                                    if (entry.gcEntry && entry.gcId && groupId && fbDb && groupData) {
+                                    // Evitar duplicado si el gasto ya volvió (ej. doble tap o auto-sync)
+                                    setGastos(gs=>gs.some(x=>x.id===g.id) ? gs : [{...g},  ...gs]);
+                                    // Si era compartido, re-crear la entrada en el grupo (Balance),
+                                    // solo si no existe ya una entrada con ese ID
+                                    if (entry.gcEntry && entry.gcId && groupId && fbDb && groupData
+                                        && !(groupData.gastosComp||[]).some(x=>x.id===entry.gcId)) {
                                       fbDb.collection("groups").doc(groupId).update({
                                         gastosComp: firebase.firestore.FieldValue.arrayUnion(entry.gcEntry)
                                       });
                                       gastosCompSyncedRef.current = [...gastosCompSyncedRef.current, entry.gcId];
                                       setGastosCompSynced(s=>[...s, entry.gcId]);
                                     }
-                                    setGastosEliminados(prev=>prev.filter(e=>!(e.gasto.id===g.id && e.deletedAt===entry.deletedAt)));
+                                    setGastosEliminados(prev=>prev.filter(e=>!(e.gasto?.id===g.id && e.deletedAt===entry.deletedAt)));
                                   }} style={{flexShrink:0,padding:"5px 10px",borderRadius:7,border:"none",background:C.green,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:11,cursor:"pointer"}}>
                                     Restaurar
                                   </button>
