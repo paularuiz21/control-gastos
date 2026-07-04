@@ -233,11 +233,19 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Mejora — Ediciones simultáneas ya no se pisan entre sí
+
+**Qué pasaba (riesgo latente):** cuando alguien editaba o borraba un gasto compartido, la app subía a la nube la **lista completa** de gastos del grupo, calculada desde su copia local. Si la otra persona había agregado o cambiado algo en ese mismo momento, ese cambio se **pisaba en silencio** — sin error ni aviso. El caso más grave estaba en el ingreso al grupo: al aceptar una invitación se reescribía el documento completo del grupo, pudiendo borrar gastos cargados en ese instante. Es el candidato más probable para las pérdidas "misteriosas" de datos del pasado.
+
+**Cómo se resolvió:** todas las escrituras pasaron a ser **atómicas por elemento**: en vez de subir la lista entera, se le dice a la base de datos exactamente qué entrada sacar y cuál agregar. La nube aplica cada operación sin tocar el resto, aunque los dos estén escribiendo a la vez. Además quedó definida una regla de conflicto sensata: si uno borra un gasto que el otro acaba de editar, sobrevive la edición (antes podía perderse todo).
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
-De una revisión general del código (julio 2026) quedaron identificados, sin implementar aún:
+De una revisión general del código (julio 2026) quedaron identificados:
 
-- **Ediciones simultáneas:** si dos personas editan o borran gastos compartidos al mismo tiempo, una puede pisar el cambio de la otra sin darse cuenta. La solución de fondo es cambiar cómo se guardan los gastos del grupo en la base de datos.
+- ~~**Ediciones simultáneas**~~ — ✅ resuelto (ver sección anterior).
 - **Múltiples grupos de balance:** hoy la app soporta un solo grupo de exactamente 2 personas. Tener varios grupos (ej. uno con la pareja y otro con hermanas) requiere cambios medianos; grupos de 3+ personas requieren rediseñar el cálculo del balance.
 - **Gasto solo-Balance:** poder cargar algo que genere deuda en el balance pero no aparezca como gasto propio en Movimientos (ej. adelantarle plata a alguien).
 
