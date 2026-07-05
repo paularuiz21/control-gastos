@@ -241,6 +241,24 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Funcionalidad 6 — Notificaciones push
+
+**Qué resuelve:** igual que Tricount — cuando la otra persona carga un gasto compartido o registra una transferencia, te llega una notificación al celular aunque la app esté cerrada: *"Leandro cargó Supermercado — Total $8.500 · tu parte $4.250"*.
+
+**Cómo funciona:**
+- Cada uno activa las notificaciones una sola vez desde **Configuración → Notificaciones → Activar** (el navegador pide permiso).
+- Al cargar un gasto compartido o una transferencia, la app le avisa automáticamente al otro.
+- Tocando la notificación se abre ClearFigures.
+
+**Cómo se hizo:** se usó Firebase Cloud Messaging (el sistema de notificaciones de Google). Tres piezas: un *service worker* (código que corre en segundo plano en el celular y muestra la notificación), un registro del "buzón" de cada usuario en la base de datos, y un intermediario en Cloudflare que es quien realmente envía la notificación — porque para enviar hace falta una credencial secreta que no puede estar en el código público de la app. Todo dentro de los planes gratuitos.
+
+**Limitaciones conocidas:**
+- En iPhone requiere iOS 16.4+ y que la app esté **instalada en la pantalla de inicio** (no abierta desde el navegador).
+- iOS puede "dormir" las notificaciones web si la app no se abre por semanas — limitación de Apple para todas las apps web.
+- Si el que carga el gasto está sin conexión, el aviso sale cuando recupera internet.
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
