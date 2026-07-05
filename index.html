@@ -17,6 +17,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet"/>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -53,6 +54,21 @@
     }
     const fbAuth = FB_CONFIGURED ? firebase.auth()      : null;
     const fbDb   = FB_CONFIGURED ? firebase.firestore() : null;
+
+    /* ── NOTIFICACIONES PUSH ──
+       PUSH_WORKER_URL: URL del Cloudflare Worker (ver cloudflare-worker-push.js)
+       FCM_VAPID_KEY:   clave pública Web Push (Firebase Console → Cloud
+                        Messaging → Certificados push web). Con ambos vacíos
+                        la funcionalidad queda oculta. */
+    const PUSH_WORKER_URL = "";
+    const FCM_VAPID_KEY   = "";
+    let fbMessaging = null;
+    try {
+      if (FB_CONFIGURED && firebase.messaging && firebase.messaging.isSupported()) {
+        fbMessaging = firebase.messaging();
+      }
+    } catch(e) { console.warn("Messaging no soportado en este navegador:", e); }
+    const PUSH_CONFIGURED = !!(fbMessaging && PUSH_WORKER_URL && FCM_VAPID_KEY);
     // Persistencia offline: las escrituras quedan encoladas en IndexedDB y se
     // completan solas al recuperar conexión, aunque se cierre la app antes.
     // synchronizeTabs evita el error si hay más de una pestaña abierta.
@@ -560,6 +576,8 @@ function App() {
   const [scanLoading,  setScanLoading]  = useState(false);
   const [privado,    setPrivado]    = useState(false);
   const [balMesesAb, setBalMesesAb] = useState(()=>new Set([today().slice(0,7)]));
+  const [pushEnabled, setPushEnabled] = useState(() => load("v1_push_enabled", false));
+  const [pushStatus,  setPushStatus]  = useState("");
   const [recurPinnedRaw,  setRecurPinnedRaw]  = useState(()=>load("v1_recur_pinned",  null));
   const [recurPinnedCRaw, setRecurPinnedCRaw] = useState(()=>load("v1_recur_pinned_c", null));
   const [recurEdit,  setRecurEdit]  = useState(false);
@@ -1086,6 +1104,15 @@ ${(()=>{
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
         });
+        // Notificación push al otro miembro
+        {
+          const miNombre = (authUser.displayName||"Tu partner").split(" ")[0];
+          const catLbl   = cats.find(c=>c.id===form.gasto)?.label || "un gasto";
+          notifyPartner(
+            `${miNombre} cargó ${form.observacion||catLbl}`,
+            otraPago ? `Total ${fmt(montoT)} · lo pagaste vos` : `Total ${fmt(montoT)} · tu parte ${fmt(montoOtro)}`
+          );
+        }
         // Si pagó otra persona, corregir también el gasto personal (via = Otra persona, sin tarjeta)
         if (otraPago) {
           setGastos(gs => gs.map(g => g.id===nuevoId
@@ -1186,6 +1213,56 @@ ${(()=>{
   };
 
   /* ── BALANCE COMPARTIDO ── */
+  /* ── NOTIFICACIONES PUSH ── */
+  const activarPush = async () => {
+    if (!PUSH_CONFIGURED || !groupId || !authUser || !fbDb) return;
+    try {
+      setPushStatus("Solicitando permiso…");
+      const perm = await Notification.requestPermission();
+      if (perm !== "granted") { setPushStatus("Permiso denegado por el navegador"); return; }
+      const token = await fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY });
+      if (!token) { setPushStatus("No se pudo obtener el token"); return; }
+      // Dot-path: escribe solo mi clave dentro de fcmTokens, sin pisar la del otro
+      await fbDb.collection("groups").doc(groupId).update({ ["fcmTokens."+authUser.uid]: token });
+      setPushEnabled(true); save("v1_push_enabled", true);
+      setPushStatus("");
+    } catch(e) { console.warn("activarPush:", e); setPushStatus("Error: " + (e.message||e)); }
+  };
+  const desactivarPush = async () => {
+    try {
+      if (groupId && fbDb && authUser) {
+        await fbDb.collection("groups").doc(groupId).update({
+          ["fcmTokens."+authUser.uid]: firebase.firestore.FieldValue.delete()
+        });
+      }
+    } catch(e) { console.warn("desactivarPush:", e); }
+    setPushEnabled(false); save("v1_push_enabled", false); setPushStatus("");
+  };
+  // Refrescar el token al abrir (FCM los rota); actualiza el doc solo si cambió
+  useEffect(() => {
+    if (!PUSH_CONFIGURED || !pushEnabled || !groupId || !authUser || !groupReady) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY }).then(t => {
+      if (t && groupData?.fcmTokens?.[authUser.uid] !== t) {
+        fbDb.collection("groups").doc(groupId).update({ ["fcmTokens."+authUser.uid]: t }).catch(()=>{});
+      }
+    }).catch(()=>{});
+  }, [groupId, pushEnabled, groupReady]);
+  // Avisar al otro miembro (fire-and-forget: nunca bloquea el guardado)
+  const notifyPartner = (title, body) => {
+    try {
+      if (!PUSH_CONFIGURED || !groupData || !authUser) return;
+      const other = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
+      const token = other && groupData.fcmTokens?.[other.uid];
+      if (!token) return;
+      fetch(PUSH_WORKER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, title, body }),
+      }).catch(()=>{});
+    } catch(e) {}
+  };
+
   const fiComp = (g) =>
     g.fecha_impacto || fechaImpacto(g.fecha, g.tarjeta||null, tarjetas);
 
@@ -2118,6 +2195,14 @@ ${(()=>{
       fbDb.collection("groups").doc(groupId).update({
         pagos: firebase.firestore.FieldValue.arrayUnion(nuevo)
       });
+      // Notificación push al otro miembro
+      {
+        const miNombre = (authUser?.displayName||"Tu partner").split(" ")[0];
+        notifyPartner(
+          `${miNombre} registró una transferencia`,
+          `${fmt(parseFloat(fp.monto))}${fp.nota?` · ${fp.nota}`:""}`
+        );
+      }
       onClose();
     };
     const otherName = groupData?.members?.find(m=>m.uid!==authUser?.uid)?.displayName||"Otra persona";
@@ -3827,6 +3912,28 @@ ${(()=>{
                 {isGuest ? "Iniciar sesión" : "Cerrar sesión"}
               </button>
             </div>
+
+            {/* ── Notificaciones push ── */}
+            {!isGuest && groupId && (
+              <div style={{background:C.bg,borderRadius:10,border:`1px solid ${C.rule}`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontFamily:sans,fontWeight:700,fontSize:12,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Notificaciones</div>
+                  {!PUSH_CONFIGURED
+                    ? <div style={{fontFamily:sansR,fontSize:12,color:C.mid}}>Pendiente de configuración del servidor</div>
+                    : <div style={{fontFamily:sansR,fontSize:12,color:C.mid}}>
+                        {pushEnabled ? "Te avisamos cuando el otro carga un gasto" : "Activá para enterarte de gastos nuevos"}
+                      </div>
+                  }
+                  {pushStatus && <div style={{fontFamily:sansR,fontSize:11,color:C.red,marginTop:2}}>{pushStatus}</div>}
+                </div>
+                {PUSH_CONFIGURED && (
+                  <button onClick={pushEnabled ? desactivarPush : activarPush}
+                    style={{background:pushEnabled?C.tagI:C.dark,border:`1px solid ${C.rule}`,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:sans,fontWeight:700,fontSize:12,color:pushEnabled?C.accent:"#fff",flexShrink:0}}>
+                    {pushEnabled ? "Desactivar" : "Activar"}
+                  </button>
+                )}
+              </div>
+            )}
 
             {[
               {id:"cats",    icon:"list",     label:"Categorías",              sub:"Agregar, editar o eliminar"},
