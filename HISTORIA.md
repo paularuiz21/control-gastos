@@ -259,6 +259,22 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Corrección — El partner no veía los gastos del otro (y auto-reparación del sync)
+
+**Qué pasaba:** Paula veía correctamente los gastos que cargaba Leandro, pero Leandro solo veía los propios. La sincronización es simétrica — el problema no estaba en el algoritmo sino en el **estado guardado** de su cuenta: su lista de control decía "estos gastos ya los incorporé" pero los registros no existían (se perdieron durante la ventana de bugs de junio). Y el sistema no tenía forma de detectar ni reparar esa inconsistencia: quedaba así para siempre.
+
+**Cómo se resolvió:** se agregó **auto-reparación** a la sincronización. En cada pasada, si una entrada del grupo figura como "ya incorporada" pero el registro no existe, se la vuelve a crear automáticamente. El celular afectado se arregla solo al abrir la app, y cualquier inconsistencia futura de este tipo también.
+
+---
+
+### Corrección — El presupuesto compartido no se compartía
+
+**Qué pasaba:** el "Presupuesto compartido" que definía una persona no lo veía la otra. Era compartido solo de nombre: cada usuario guardaba su propia copia privada, y lo que definía uno jamás llegaba al otro.
+
+**Cómo se resolvió:** el presupuesto compartido ahora se guarda en el espacio del **grupo** (el mismo lugar donde viven los gastos compartidos y el balance). Cualquiera de los dos lo edita y ambos ven lo mismo. La copia que ya existía se migra automáticamente al grupo la primera vez.
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
