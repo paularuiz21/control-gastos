@@ -1375,7 +1375,10 @@ ${(()=>{
     ...c,
     total:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").reduce((s,g)=>s+g.monto,0),
     count:filtrados.filter(g=>g.gasto===c.id&&g.tipo_mov==="Gasto").length,
-  })).filter(c=>c.total>0).sort((a,b)=>b.total-a.total);
+    // Mostrar también categorías sin gasto pero con presupuesto asignado
+    // (propio o la mitad del compartido, igual que muestra la tarjeta)
+  })).filter(c=>c.total>0 || (presupMes[c.id]||0) + Math.round((presupCompMes[c.id]||0)/2) > 0)
+    .sort((a,b)=>b.total-a.total);
 
   const exportarCSV = () => {
     const h="Fecha,Gasto,Observación,Tipo mov,Tipo,Via,Monto dividir,Monto";
@@ -3149,7 +3152,7 @@ ${(()=>{
                 }).map(c => {
                   const gc = gastosComp.filter(g=>g.gasto===c.id).reduce((s,g)=>s+montoTotalComp(g),0);
                   return {...c, gc};
-                }).filter(c=>c.gc>0).sort((a,b)=>b.gc-a.gc);
+                }).sort((a,b)=>b.gc-a.gc);
                 if (!catsC.length) return null;
                 const partner = (groupData?.members||[]).find(m=>m.uid!==authUser?.uid);
                 const partnerName = partner?.displayName || "Partner";
