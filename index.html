@@ -1247,13 +1247,22 @@ ${(()=>{
 
   /* ── BALANCE COMPARTIDO ── */
   /* ── NOTIFICACIONES PUSH ── */
+  // Registrar el service worker y esperar a que esté ACTIVO antes de pedir
+  // el token. getToken() lo registra solo, pero puede intentar suscribirse
+  // antes de que active → "Subscription failed - no active Service Worker".
+  const getPushToken = async () => {
+    const swReg = await navigator.serviceWorker.register("/firebase-messaging-sw.js");
+    await navigator.serviceWorker.ready;
+    return fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY, serviceWorkerRegistration: swReg });
+  };
   const activarPush = async () => {
     if (!PUSH_CONFIGURED || !groupId || !authUser || !fbDb) return;
     try {
       setPushStatus("Solicitando permiso…");
       const perm = await Notification.requestPermission();
       if (perm !== "granted") { setPushStatus("Permiso denegado por el navegador"); return; }
-      const token = await fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY });
+      setPushStatus("Activando…");
+      const token = await getPushToken();
       if (!token) { setPushStatus("No se pudo obtener el token"); return; }
       // Dot-path: escribe solo mi clave dentro de fcmTokens, sin pisar la del otro
       await fbDb.collection("groups").doc(groupId).update({ ["fcmTokens."+authUser.uid]: token });
@@ -1275,7 +1284,7 @@ ${(()=>{
   useEffect(() => {
     if (!PUSH_CONFIGURED || !pushEnabled || !groupId || !authUser || !groupReady) return;
     if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
-    fbMessaging.getToken({ vapidKey: FCM_VAPID_KEY }).then(t => {
+    getPushToken().then(t => {
       if (t && groupData?.fcmTokens?.[authUser.uid] !== t) {
         fbDb.collection("groups").doc(groupId).update({ ["fcmTokens."+authUser.uid]: t }).catch(()=>{});
       }
