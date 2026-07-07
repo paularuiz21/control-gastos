@@ -772,8 +772,25 @@ function App() {
       prevGCEntriesRef.current = new Map(allGC.map(g => [g.id, g]));
     }
 
+    // 1.b AUTO-REPARACIÓN de estado fantasma: entradas marcadas como
+    // sincronizadas cuya materialización (gasto numérico o gc_) no existe.
+    // Se las quita de la lista para que el paso 2 las vuelva a crear.
+    // Solo con syncReady: antes de cargar los datos del usuario, la ausencia
+    // de un gasto no dice nada (recrearía duplicados sobre estado a medias).
+    let effectiveSynced = currentSynced;
+    if (syncReady) {
+      const localIds = new Set(gastosRef.current.map(g => g.id));
+      const ghosts = new Set(currentSynced.filter(id =>
+        currentGCIds.has(id) && !localIds.has(id) && !localIds.has("gc_"+id)
+      ));
+      if (ghosts.size) {
+        console.warn(`[sync] Auto-reparación: re-creando ${ghosts.size} gastos compartidos perdidos`);
+        effectiveSynced = currentSynced.filter(id => !ghosts.has(id));
+      }
+    }
+
     // 2. Entradas nuevas (nunca sincronizadas)
-    const rawUnsynced = allGC.filter(g => !currentSynced.includes(g.id));
+    const rawUnsynced = allGC.filter(g => !effectiveSynced.includes(g.id));
     // Separar: entradas "perdidas" (su gasto personal ya existe con ese id numérico) vs genuinamente nuevas
     const existingPersonalNumIds = new Set(
       gastosRef.current.filter(g => typeof g.id === "number").map(g => g.id)
@@ -782,7 +799,7 @@ function App() {
     const unsynced        = rawUnsynced.filter(g => !existingPersonalNumIds.has(g.id));
 
     // 3. Entradas ya sincronizadas que pueden haber cambiado
-    const syncedEntries = allGC.filter(g => currentSynced.includes(g.id) || recoveredSynced.some(r=>r.id===g.id));
+    const syncedEntries = allGC.filter(g => effectiveSynced.includes(g.id) || recoveredSynced.some(r=>r.id===g.id));
     const updatesMap    = new Map(syncedEntries.map(g => [g.id, buildFields(g)]));
 
     // Fingerprint para detectar si los datos realmente cambiaron (evita setGastos en cada snapshot)
@@ -860,11 +877,27 @@ function App() {
     if (deletedIds.size || unsynced.length || recoveredSynced.length) {
       const newIds        = unsynced.map(g => g.id);
       const recoveredIds  = recoveredSynced.map(g => g.id);
-      const updatedSynced = [...new Set([...currentSynced.filter(id => !deletedIds.has(id)), ...newIds, ...recoveredIds])];
+      const updatedSynced = [...new Set([...effectiveSynced.filter(id => !deletedIds.has(id)), ...newIds, ...recoveredIds])];
       gastosCompSyncedRef.current = updatedSynced;
-      setGastosCompSynced(s => [...new Set([...s.filter(id=>!deletedIds.has(id)), ...newIds, ...recoveredIds])]);
+      setGastosCompSynced(updatedSynced);
     }
-  }, [groupData]);
+  }, [groupData, syncReady]);
+
+  /* ── PRESUPUESTO COMPARTIDO: el doc del grupo es la fuente de verdad ──
+     Antes vivía solo en el doc del usuario: cada uno veía su propia copia
+     y el partner nunca veía lo que el otro definía. */
+  useEffect(() => {
+    if (!groupData || !groupId || !fbDb) return;
+    const gp = groupData.presupComp;
+    if (gp && Object.keys(gp).length) {
+      // Bajar la versión del grupo (si difiere de la local)
+      setPresupComp(prev => JSON.stringify(prev) === JSON.stringify(gp) ? prev : gp);
+    } else if (syncReady && Object.keys(presupComp).length) {
+      // Migración one-time: el grupo no tiene presupuesto pero yo sí tengo
+      // una copia local (definida antes de este fix) → subirla al grupo
+      fbDb.collection("groups").doc(groupId).update({ presupComp }).catch(()=>{});
+    }
+  }, [groupData, syncReady, presupComp]);
 
   /* ── Mostrar prompt de invitación si hay token en la URL ── */
   useEffect(() => {
@@ -1705,7 +1738,12 @@ ${(()=>{
             </div>
           ))}
         </div>
-        <button onClick={()=>{setPresupComp(local);setModal(null);}} style={{width:"100%", padding:"13px", borderRadius:10, border:"none", background:"#7C3AED", color:"#fff", fontFamily:sans, fontWeight:700, fontSize:14, cursor:"pointer"}}>
+        <button onClick={()=>{
+          setPresupComp(local);
+          // El presupuesto compartido vive en el doc del GRUPO: así lo ven ambos
+          if (groupId && fbDb) fbDb.collection("groups").doc(groupId).update({presupComp: local}).catch(e=>console.warn("presupComp:", e));
+          setModal(null);
+        }} style={{width:"100%", padding:"13px", borderRadius:10, border:"none", background:"#7C3AED", color:"#fff", fontFamily:sans, fontWeight:700, fontSize:14, cursor:"pointer"}}>
           Guardar presupuesto compartido
         </button>
       </Modal>
