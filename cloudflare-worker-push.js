@@ -111,7 +111,7 @@ export default {
                 notification: {
                   title,
                   body: body || "",
-                  icon: "https://clearfigures.app/icons/icon.svg",
+                  icon: "https://clearfigures.app/icons/icon-192.png",
                 },
                 fcm_options: { link: "https://clearfigures.app/" },
               },

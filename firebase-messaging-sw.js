@@ -23,7 +23,7 @@ messaging.onBackgroundMessage(payload => {
   const d = payload.data || {};
   self.registration.showNotification(d.title || "ClearFigures", {
     body: d.body || "",
-    icon: "/icons/icon.svg",
+    icon: "/icons/icon-192.png",
     data: { url: d.url || "/" },
   });
 });
