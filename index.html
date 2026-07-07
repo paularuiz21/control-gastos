@@ -1305,6 +1305,49 @@ ${(()=>{
     } catch(e) {}
   };
 
+  /* ── REPARACIÓN MANUAL DEL SYNC (Config → Sincronización del grupo) ──
+     Materializa toda entrada de gastosComp sin gasto local (ni numérico
+     ni gc_). Herramienta de diagnóstico/cura para estados inconsistentes
+     que el auto-sync no haya resuelto. Idempotente. */
+  const repararSyncGrupo = () => {
+    if (!groupData || !authUser) return 0;
+    const myUid    = authUser.uid;
+    const catsComp = groupData?.catsComp?.length ? groupData.catsComp : CATS_COMP_DEFAULT;
+    const allGC    = groupData.gastosComp || [];
+    const localIds = new Set(gastosRef.current.map(g => g.id));
+    const faltantes = allGC.filter(g => !localIds.has(g.id) && !localIds.has("gc_"+g.id));
+    if (!faltantes.length) return 0;
+    const build = (g) => {
+      const isMyEntry = g.pagadoPor === myUid;
+      const catLabel  = catsComp.find(c=>c.id===g.catId)?.label?.toLowerCase()||"";
+      const baseId    = (g.catId||"").replace(/^comp_/,"");
+      const catMatch  = cats.find(c=>c.id===baseId)
+        || cats.find(c=>c.label.toLowerCase()===catLabel)
+        || cats.find(c=>c.id==="extraordinarios")
+        || cats[0];
+      return {
+        id: "gc_"+g.id,
+        fecha: g.fecha,
+        fecha_impacto: (isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha,
+        gasto: catMatch?.id, observacion: g.observacion || catsComp.find(c=>c.id===g.catId)?.label || "",
+        tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
+        via: isMyEntry ? (g.via || "Efectivo") : "Balance",
+        tarjeta:(isMyEntry&&g.tarjeta)?g.tarjeta:null,
+        monto_dividir:null, monto: isMyEntry ? g.montoMio : g.montoOtro,
+        moneda:"ARS", monto_original:null, tcambio:null,
+      };
+    };
+    setGastos(gs => {
+      const ex = new Set(gs.map(g=>g.id));
+      const nuevos = faltantes.map(build).filter(g=>!ex.has(g.id));
+      return [...nuevos, ...gs];
+    });
+    const ids = faltantes.map(g=>g.id);
+    gastosCompSyncedRef.current = [...new Set([...gastosCompSyncedRef.current, ...ids])];
+    setGastosCompSynced(s=>[...new Set([...s, ...ids])]);
+    return faltantes.length;
+  };
+
   const fiComp = (g) =>
     g.fecha_impacto || fechaImpacto(g.fecha, g.tarjeta||null, tarjetas);
 
@@ -3984,6 +4027,34 @@ ${(()=>{
                 )}
               </div>
             )}
+
+            {/* ── Diagnóstico: sincronización del grupo ── */}
+            {!isGuest && groupId && groupData && (()=>{
+              const allGC = groupData.gastosComp||[];
+              const localIds = new Set(gastos.map(g=>g.id));
+              const faltantes = allGC.filter(g => !localIds.has(g.id) && !localIds.has("gc_"+g.id));
+              return (
+                <div style={{background:C.bg,borderRadius:10,border:`1px solid ${C.rule}`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:sans,fontWeight:700,fontSize:12,color:C.faint,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Sincronización del grupo</div>
+                    <div style={{fontFamily:sansR,fontSize:12,color:C.mid}}>
+                      {allGC.length} gastos en el grupo · {allGC.length-faltantes.length} en tus movimientos
+                    </div>
+                    {faltantes.length>0 && (
+                      <div style={{fontFamily:sansR,fontSize:11,color:C.red,marginTop:2}}>
+                        ⚠ {faltantes.length} sin traer a tus movimientos
+                      </div>
+                    )}
+                  </div>
+                  {faltantes.length>0 && (
+                    <button onClick={()=>{ repararSyncGrupo(); }}
+                      style={{background:C.dark,border:`1px solid ${C.rule}`,borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:sans,fontWeight:700,fontSize:12,color:"#fff",flexShrink:0}}>
+                      Traer
+                    </button>
+                  )}
+                </div>
+              );
+            })()}
 
             {[
               {id:"cats",    icon:"list",     label:"Categorías",              sub:"Agregar, editar o eliminar"},
