@@ -1076,44 +1076,50 @@ ${(()=>{
           ? Number(editando.slice(3))
           : editando;
         const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
-        if (gcEntry) {
-          const otraPago  = form.quienPago === "otra";
-          const partner   = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
-          const tc        = form.moneda==="USD" && form.tcambio ? parseFloat(form.tcambio) : 1;
-          const montoT    = Math.round((parseFloat(form.monto_dividir)||0) * tc * 100) / 100;
-          const miParte   = Math.round(montoFinal() * tc * 100) / 100;
-          const suParte   = Math.round((montoT - miParte)*100)/100;
-          const montoMio  = otraPago ? suParte  : miParte;
-          const montoOtro = otraPago ? miParte  : suParte;
-          const updatedGC = {
-            ...gcEntry,
-            fecha: form.fecha,
-            fecha_impacto: otraPago ? form.fecha : imp,
-            catId: form.gasto,
-            observacion: form.observacion,
-            monto: montoT,
-            pagadoPor: otraPago ? (partner?.uid||"") : authUser.uid,
-            montoMio, montoOtro,
-            splitType: form.divTipo,
-            splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
-            via: otraPago ? "Balance" : form.via,
-            tarjeta: otraPago ? null : (form.tarjeta||null),
-          };
-          // Reemplazo atómico por elemento (remove + union) en vez de subir el
-          // array entero: no pisa cambios que el partner haya hecho en simultáneo.
-          fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(gcEntry)});
-          fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(updatedGC)});
+        const otraPago  = form.sumar_balance && form.quienPago === "otra";
+        const partner   = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
+        const tc        = form.moneda==="USD" && form.tcambio ? parseFloat(form.tcambio) : 1;
+        const montoT    = Math.round((parseFloat(form.monto_dividir)||0) * tc * 100) / 100;
+        const miParte   = Math.round(montoFinal() * tc * 100) / 100;
+        const suParte   = Math.round((montoT - miParte)*100)/100;
+        const montoMio  = otraPago ? suParte  : miParte;
+        const montoOtro = otraPago ? miParte  : suParte;
+        const updatedGC = {
+          ...(gcEntry||{}),
+          id: numId,
+          fecha: form.fecha,
+          fecha_impacto: otraPago ? form.fecha : imp,
+          catId: form.gasto,
+          observacion: form.observacion,
+          monto: montoT,
+          pagadoPor: otraPago ? (partner?.uid||"") : authUser.uid,
+          montoMio, montoOtro,
+          splitType: form.divTipo,
+          splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
+          via: otraPago ? "Balance" : form.via,
+          tarjeta: otraPago ? null : (form.tarjeta||null),
+          enBalance: !!form.sumar_balance,
+        };
+        // Reemplazo atómico por elemento (remove + union). Si no estaba en el
+        // grupo (ej. dividido-sin-balance viejo), solo se agrega.
+        if (gcEntry) fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(gcEntry)});
+        fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(updatedGC)});
+        if (!gcEntry) {
+          gastosCompSyncedRef.current = [...new Set([...gastosCompSyncedRef.current, numId])];
+          setGastosCompSynced(s=>[...new Set([...s, numId])]);
         }
       }
       setEditando(null); setModal(null);
     } else {
       setGastos(gs=>[nuevo,...gs]);
-      // Sumar al balance compartido si está marcado
-      if (form.dividir && form.sumar_balance && groupId && authUser && fbDb) {
+      // Todo gasto DIVIDIDO se comparte con el grupo (Leandro lo ve en Movimientos
+      // y Resumen). "Sumar al balance" solo decide si además genera deuda: se guarda
+      // en enBalance. Sin balance → enBalance:false → no cuenta ni aparece en Balance.
+      if (form.dividir && groupId && authUser && fbDb) {
         // Aplicar tipo de cambio si el gasto es en USD
         const tc        = form.moneda==="USD" && form.tcambio ? parseFloat(form.tcambio) : 1;
         const montoT    = Math.round((parseFloat(form.monto_dividir)||0) * tc * 100) / 100;
-        const otraPago  = form.quienPago === "otra";
+        const otraPago  = form.sumar_balance && form.quienPago === "otra";
         const partner   = (groupData?.members||[]).find(m=>m.uid!==authUser.uid);
         // Si pagó otra persona: montoMio=su parte (lo q el partner pagó), montoOtro=mi parte (lo q yo debo)
         const miParte   = Math.round(montoFinal() * tc * 100) / 100;
@@ -1137,6 +1143,7 @@ ${(()=>{
           splitValue: form.divTipo==="pct" ? (parseFloat(form.divValor)||50) : montoMio,
           via: otraPago ? "Balance" : form.via,
           tarjeta: otraPago ? null : (form.tarjeta||null),
+          enBalance: !!form.sumar_balance,
         };
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
@@ -1360,6 +1367,7 @@ ${(()=>{
     const hoy = today();
     let b = 0;
     (gastosComp||[]).forEach(g => {
+      if (g.enBalance === false) return; // compartido pero sin deuda: no cuenta
       const fi = fiComp(g);
       if (fi <= hoy) {
         const mo = g.montoOtro || 0;
@@ -2715,6 +2723,12 @@ ${(()=>{
                 Tu parte: {fmt(montoFinal())}
               </div>
             )}
+            {groupId && form.dividir && (
+              <div style={{marginTop:8,fontFamily:sans,fontSize:11,color:C.comp,display:"flex",alignItems:"center",gap:5}}>
+                <Icon name="users" size={11} color={C.comp}/>
+                Al dividir, este gasto aparece en el resumen compartido de ambos
+              </div>
+            )}
             {groupId && (
               <div style={{marginTop:10}}>
                 <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontFamily:sans,fontSize:12,color:C.blue,fontWeight:600}}>
@@ -2722,7 +2736,7 @@ ${(()=>{
                     onChange={e=>setForm({...form,sumar_balance:e.target.checked,quienPago:"yo"})}
                     style={{accentColor:C.blue}}/>
                   <Icon name="users" size={13} color={C.blue}/>
-                  Sumar al balance compartido
+                  Sumar al balance compartido (genera deuda)
                 </label>
                 {form.sumar_balance && (
                   <div style={{display:"flex",gap:5,marginTop:8}}>
@@ -3716,7 +3730,7 @@ ${(()=>{
           const ymImpacto   = item => item.tipo==="pago" ? (item.fecha||"").slice(0,7) : fiComp(item).slice(0,7);
           const esActivo    = item => item.tipo==="pago" || fiComp(item) <= hoyStr;
           const historia    = [
-            ...gastosComp.map(g=>({...g,tipo:"gasto"})),
+            ...gastosComp.filter(g=>g.enBalance!==false).map(g=>({...g,tipo:"gasto"})),
             ...pagos.map(p=>({...p,tipo:"pago"})),
           ].sort((a,b)=>(b.fecha||"").localeCompare(a.fecha||""));
           const historiaActiva    = historia.filter(esActivo);
@@ -3754,7 +3768,7 @@ ${(()=>{
                 <div style={{display:"flex",gap:6,marginTop:12}}>
                   {members.map(m=>{
                     const isMe=m.uid===myUid;
-                    const paid=gastosComp.filter(g=>g.pagadoPor===m.uid).reduce((s,g)=>s+g.monto,0);
+                    const paid=gastosComp.filter(g=>g.pagadoPor===m.uid && g.enBalance!==false).reduce((s,g)=>s+g.monto,0);
                     return (
                       <div key={m.uid} style={{flex:1,background:C.bg,borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
                         <div style={{fontFamily:sans,fontSize:10,color:C.mid,marginBottom:2}}>{isMe?"Yo":(m.displayName||"Otra persona")}</div>
