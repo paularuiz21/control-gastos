@@ -1359,6 +1359,43 @@ ${(()=>{
     return faltantes.length;
   };
 
+  // Gastos DIVIDIDOS propios (monto_dividir) que aún no están en el grupo:
+  // los cargados como divididos-sin-balance ANTES del cambio de modelo (ej.
+  // alquiler). Empujarlos al grupo (enBalance:false) → el partner los ve.
+  const divididosSinCompartir = () =>
+    (groupId && groupData)
+      ? gastos.filter(g => typeof g.id==="number" && g.monto_dividir!=null
+          && !(groupData.gastosComp||[]).some(x=>x.id===g.id))
+      : [];
+  const compartirDivididos = () => {
+    if (!groupData || !authUser || !fbDb || !groupId) return 0;
+    const faltantes = divididosSinCompartir();
+    if (!faltantes.length) return 0;
+    faltantes.forEach(g => {
+      const total   = g.monto_dividir;
+      const miParte = g.monto;
+      const suParte = Math.round((total - miParte)*100)/100;
+      const gc = {
+        id: g.id,
+        fecha: g.fecha,
+        fecha_impacto: g.fecha_impacto || g.fecha,
+        catId: g.gasto,
+        observacion: g.observacion || "",
+        monto: total,
+        pagadoPor: authUser.uid,
+        montoOtro: suParte, montoMio: miParte,
+        splitType: "monto", splitValue: miParte,
+        via: g.via || "Efectivo", tarjeta: g.tarjeta || null,
+        enBalance: false,
+      };
+      fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(gc)});
+    });
+    const ids = faltantes.map(g=>g.id);
+    gastosCompSyncedRef.current = [...new Set([...gastosCompSyncedRef.current, ...ids])];
+    setGastosCompSynced(s=>[...new Set([...s, ...ids])]);
+    return faltantes.length;
+  };
+
   const fiComp = (g) =>
     g.fecha_impacto || fechaImpacto(g.fecha, g.tarjeta||null, tarjetas);
 
@@ -4070,6 +4107,26 @@ ${(()=>{
                       Traer
                     </button>
                   )}
+                </div>
+              );
+            })()}
+
+            {/* ── Compartir gastos divididos que quedaron solo en este dispositivo ── */}
+            {!isGuest && groupId && groupData && (()=>{
+              const pend = divididosSinCompartir();
+              if (!pend.length) return null;
+              return (
+                <div style={{background:C.bg,borderRadius:10,border:`1px solid ${C.comp}`,padding:"12px 16px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontFamily:sans,fontWeight:700,fontSize:12,color:C.comp,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:2}}>Gastos divididos sin compartir</div>
+                    <div style={{fontFamily:sansR,fontSize:12,color:C.mid}}>
+                      {pend.length} gasto{pend.length!==1?"s":""} dividido{pend.length!==1?"s":""} que la otra persona todavía no ve
+                    </div>
+                  </div>
+                  <button onClick={()=>{ const n=compartirDivididos(); if(n) alert(`Listo: ${n} gasto${n!==1?"s":""} compartido${n!==1?"s":""} con el grupo. Pedile a la otra persona que recargue la app.`); }}
+                    style={{background:C.comp,border:"none",borderRadius:8,padding:"7px 12px",cursor:"pointer",fontFamily:sans,fontWeight:700,fontSize:12,color:"#fff",flexShrink:0}}>
+                    Compartir
+                  </button>
                 </div>
               );
             })()}
