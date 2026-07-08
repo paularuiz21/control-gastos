@@ -737,7 +737,11 @@ function App() {
       const isMyEntry = g.pagadoPor === myUid;
       const myShare   = isMyEntry ? g.montoMio : g.montoOtro;
       const viaFinal  = isMyEntry ? (g.via || "Efectivo") : "Balance";
-      const fi        = (isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha;
+      // Usar la fecha de impacto que el DUEÑO ya guardó en la entrada del grupo
+      // (él tiene la tarjeta y la calculó bien). El partner no puede recalcularla
+      // porque no tiene esa tarjeta → antes caía en el mes de pago (bug: gastos
+      // del otro aparecían en el mes equivocado en Movimientos/Resumen).
+      const fi        = g.fecha_impacto || ((isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha);
       const catLabel  = catsComp.find(c=>c.id===g.catId)?.label?.toLowerCase()||"";
       const baseId    = (g.catId||"").replace(/^comp_/,"");
       const catMatch  = cats.find(c=>c.id===baseId)
@@ -1328,7 +1332,7 @@ ${(()=>{
       return {
         id: "gc_"+g.id,
         fecha: g.fecha,
-        fecha_impacto: (isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha,
+        fecha_impacto: g.fecha_impacto || ((isMyEntry && g.tarjeta) ? fechaImpacto(g.fecha, g.tarjeta, tarjetas) : g.fecha),
         gasto: catMatch?.id, observacion: g.observacion || catsComp.find(c=>c.id===g.catId)?.label || "",
         tipo_mov:"Gasto", tipo:catMatch?.tipo||"Discrecional",
         via: isMyEntry ? (g.via || "Efectivo") : "Balance",
