@@ -275,6 +275,18 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Corrección — Los gastos "viejos" no se podían compartir (y banco de pruebas)
+
+**Qué pasaba:** algunos gastos no se podían compartir con la otra persona por más que se editaran o se usara el botón de compartir (caso concreto: el alquiler). 
+
+**Cómo se encontró:** se armó un **banco de pruebas automatizado** (31 casos) que extrae las funciones reales de la app y simula los dos celulares a la vez: tarjetas y cierres, división 50/50 / % / monto fijo, "pagó la otra persona", balance simétrico, compartidos sin deuda, pendientes por mes de impacto, borrar/restaurar. 29 casos pasaron; los 2 que fallaron señalaron la causa exacta.
+
+**Por qué pasaba:** los gastos precargados del Excel original tienen un identificador de **texto**, mientras que los nuevos usan un número. Toda la maquinaria que conecta el gasto personal con su entrada en el grupo convertía el identificador asumiendo que era un número — con los de texto el resultado era inválido y la conexión se rompía en silencio: no se podían compartir, ni editar en el grupo, ni borrar en espejo.
+
+**Cómo se resolvió:** se creó una única función de traducción de identificadores que maneja los dos formatos, y se reemplazaron las nueve conversiones sueltas que había en el código. El banco de pruebas quedó guardado para correrlo ante futuros cambios (31/31 en verde).
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
