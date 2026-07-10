@@ -332,6 +332,20 @@ const today = () => {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 };
 
+// ID de la entrada del grupo correspondiente a un gasto personal.
+// Los gastos nuevos usan Date.now() (número), pero los precargados/viejos
+// pueden tener id string. Los materializados del partner llevan prefijo "gc_".
+// Convertir con Number() a secas daba NaN para ids string y rompía la
+// correspondencia gasto personal ↔ entrada del grupo.
+const gcEntryId = (id) => {
+  if (typeof id === "string" && id.startsWith("gc_")) {
+    const raw = id.slice(3);
+    const n = Number(raw);
+    return Number.isNaN(n) ? raw : n;
+  }
+  return id;
+};
+
 const getCierre = (t, fecha) => {
   try {
     if (!t || t.cierre === null || t.cierre === undefined) return 19;
@@ -795,12 +809,13 @@ function App() {
 
     // 2. Entradas nuevas (nunca sincronizadas)
     const rawUnsynced = allGC.filter(g => !effectiveSynced.includes(g.id));
-    // Separar: entradas "perdidas" (su gasto personal ya existe con ese id numérico) vs genuinamente nuevas
-    const existingPersonalNumIds = new Set(
-      gastosRef.current.filter(g => typeof g.id === "number").map(g => g.id)
+    // Separar: entradas "perdidas" (su gasto personal ya existe con ese id,
+    // numérico o string) vs genuinamente nuevas
+    const existingPersonalIds = new Set(
+      gastosRef.current.filter(g => !(typeof g.id === "string" && g.id.startsWith("gc_"))).map(g => g.id)
     );
-    const recoveredSynced = rawUnsynced.filter(g => existingPersonalNumIds.has(g.id));
-    const unsynced        = rawUnsynced.filter(g => !existingPersonalNumIds.has(g.id));
+    const recoveredSynced = rawUnsynced.filter(g => existingPersonalIds.has(g.id));
+    const unsynced        = rawUnsynced.filter(g => !existingPersonalIds.has(g.id));
 
     // 3. Entradas ya sincronizadas que pueden haber cambiado
     const syncedEntries = allGC.filter(g => effectiveSynced.includes(g.id) || recoveredSynced.some(r=>r.id===g.id));
@@ -815,21 +830,16 @@ function App() {
 
     // Antes de eliminar, mover a papelera los gastos que van a desaparecer
     if (deletedIds.size > 0) {
-      const toDelete = gastosRef.current.filter(g => {
-        const numId = typeof g.id === "string" && g.id.startsWith("gc_")
-          ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
-        return deletedIds.has(numId);
-      });
+      const toDelete = gastosRef.current.filter(g => deletedIds.has(gcEntryId(g.id)));
       if (toDelete.length > 0) {
         const now = Date.now();
         setGastosEliminados(prev => [
           // Guardar también gcEntry/gcId (desde el snapshot anterior) para que
           // "Restaurar" pueda re-crear la entrada en el Balance del grupo.
           ...toDelete.map(g => {
-            const numId = typeof g.id === "string" && g.id.startsWith("gc_")
-              ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
-            const gcEntry = numId ? (prevEntriesMap.get(numId) || null) : null;
-            return {gasto:g, gcEntry, gcId: gcEntry ? numId : null, deletedAt:now, reason:"sync_auto"};
+            const eid = gcEntryId(g.id);
+            const gcEntry = eid != null ? (prevEntriesMap.get(eid) || null) : null;
+            return {gasto:g, gcEntry, gcId: gcEntry ? eid : null, deletedAt:now, reason:"sync_auto"};
           }),
           ...prev.filter(e => !toDelete.some(d => d.id === e.gasto?.id))
         ]);
@@ -838,17 +848,13 @@ function App() {
 
     setGastos(gs => {
       // Quitar gastos cuya entrada fue eliminada de Firestore
-      let result = gs.filter(g => {
-        const numId = typeof g.id === "string" && g.id.startsWith("gc_")
-          ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
-        return !deletedIds.has(numId);
-      });
+      let result = gs.filter(g => !deletedIds.has(gcEntryId(g.id)));
       // Actualizar gastos existentes con datos de Firestore
       result = result.map(g => {
         const isGC  = typeof g.id === "string" && g.id.startsWith("gc_");
-        const numId = isGC ? Number(g.id.slice(3)) : (typeof g.id === "number" ? g.id : null);
-        if (numId && updatesMap.has(numId)) {
-          const f = updatesMap.get(numId);
+        const entryId = gcEntryId(g.id);
+        if (entryId != null && updatesMap.has(entryId)) {
+          const f = updatesMap.get(entryId);
           if (isGC) {
             // Gasto auto-sincronizado: reemplazar completamente
             return {...f, id: g.id};
@@ -861,11 +867,12 @@ function App() {
         }
         return g;
       });
-      // Eliminar gc_ duplicados: si ya existe un gasto personal con el mismo ID numérico, el gc_ sobra
-      const personalNumIds = new Set(result.filter(g => typeof g.id === "number").map(g => g.id));
+      // Eliminar gc_ duplicados: si ya existe un gasto personal con el mismo ID
+      // (numérico o string), el gc_ sobra
+      const personalIds = new Set(result.filter(g => !(typeof g.id === "string" && g.id.startsWith("gc_"))).map(g => g.id));
       result = result.filter(g => {
         if (typeof g.id === "string" && g.id.startsWith("gc_")) {
-          return !personalNumIds.has(Number(g.id.slice(3)));
+          return !personalIds.has(gcEntryId(g.id));
         }
         return true;
       });
@@ -1072,9 +1079,7 @@ ${(()=>{
       setGastos(gs=>gs.map(g=>g.id===editando?nuevo:g));
       // Si el gasto era compartido, sincronizar cambios en gastosComp de Firestore
       if (form.dividir && groupId && authUser && fbDb && groupData) {
-        const numId = typeof editando === "string" && editando.startsWith("gc_")
-          ? Number(editando.slice(3))
-          : editando;
+        const numId = gcEntryId(editando);
         const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
         const otraPago  = form.sumar_balance && form.quienPago === "otra";
         const partner   = (groupData.members||[]).find(m=>m.uid!==authUser.uid);
@@ -1176,7 +1181,7 @@ ${(()=>{
     // Intentar recuperar tipo de división y quién pagó desde la entrada gastosComp
     let divTipo = "mitad", divValor = "", quienPago = "yo";
     if (groupData && g.monto_dividir) {
-      const numId = typeof g.id === "string" ? Number(g.id.replace("gc_","")) : g.id;
+      const numId = gcEntryId(g.id);
       const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
       if (gcEntry) {
         divTipo  = gcEntry.splitType || "mitad";
@@ -1210,15 +1215,14 @@ ${(()=>{
     if (groupData) {
       if (typeof id==="string" && id.startsWith("gc_")) {
         // Gasto recibido del partner (auto-sync)
-        gcId    = Number(id.slice(3));
+        gcId    = gcEntryId(id);
         gcEntry = (groupData.gastosComp||[]).find(x=>x.id===gcId);
       } else if (g?.monto_dividir) {
-        // Gasto propio compartido: el ID numérico coincide con el gastosComp
+        // Gasto propio compartido: el ID (numérico o string) coincide con el gastosComp
         // Solo buscamos si el gasto era compartido (tiene monto_dividir), para
         // evitar colisiones accidentales con gastos personales cuyo ID coincida.
-        const numId = typeof id === "number" ? id : Number(id);
-        gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
-        if (gcEntry) gcId = numId;
+        gcEntry = (groupData.gastosComp||[]).find(x=>x.id===id);
+        if (gcEntry) gcId = id;
       }
     }
     // Guardar en buffer de undo
@@ -1364,7 +1368,8 @@ ${(()=>{
   // alquiler). Empujarlos al grupo (enBalance:false) → el partner los ve.
   const divididosSinCompartir = () =>
     (groupId && groupData)
-      ? gastos.filter(g => typeof g.id==="number" && g.monto_dividir!=null
+      ? gastos.filter(g => !(typeof g.id==="string" && g.id.startsWith("gc_"))
+          && g.monto_dividir!=null
           && !(groupData.gastosComp||[]).some(x=>x.id===g.id))
       : [];
   const compartirDivididos = () => {
@@ -1457,7 +1462,7 @@ ${(()=>{
   // Total del hogar para un gasto compartido: propio → monto_dividir; del partner → buscar en groupData
   const montoTotalComp = g => {
     if (g.monto_dividir != null) return g.monto_dividir;
-    const gcId = Number(g.id.slice(3));
+    const gcId = gcEntryId(g.id);
     return (groupData?.gastosComp||[]).find(x=>x.id===gcId)?.monto || g.monto;
   };
   const gastosComp = filtrados.filter(isGastoComp);
