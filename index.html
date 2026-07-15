@@ -199,6 +199,7 @@ const ICONS = {
   cash:      ["M12 1v22","M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"],
   transfer:  ["M7 16V4m0 0L3 8m4-4l4 4","M17 8v12m0 0l4-4m-4 4l-4-4"],
   plus:      ["M12 5v14","M5 12h14"],
+  bell:      ["M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9","M13.7 21a2 2 0 0 1-3.4 0"],
   list:      ["M9 6h11","M9 12h11","M9 18h11","M4 6h.01","M4 12h.01","M4 18h.01"],
   barchart:  ["M18 20V10","M12 20V4","M6 20v-6"],
   settings:  ["M12 15a3 3 0 100-6 3 3 0 000 6z","M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"],
@@ -592,6 +593,8 @@ function App() {
   const [balMesesAb, setBalMesesAb] = useState(()=>new Set([today().slice(0,7)]));
   const [pushEnabled, setPushEnabled] = useState(() => load("v1_push_enabled", false));
   const [pushStatus,  setPushStatus]  = useState("");
+  const [novedadesOpen, setNovedadesOpen] = useState(false);
+  const [novedadesSeen, setNovedadesSeen] = useState(() => load("v1_novedades_seen", 0));
   const [recurPinnedRaw,  setRecurPinnedRaw]  = useState(()=>load("v1_recur_pinned",  null));
   const [recurPinnedCRaw, setRecurPinnedCRaw] = useState(()=>load("v1_recur_pinned_c", null));
   const [recurEdit,  setRecurEdit]  = useState(false);
@@ -1104,6 +1107,7 @@ ${(()=>{
           via: otraPago ? "Balance" : form.via,
           tarjeta: otraPago ? null : (form.tarjeta||null),
           enBalance: !!form.sumar_balance,
+          creadoPor: gcEntry?.creadoPor || authUser.uid,
         };
         // Reemplazo atómico por elemento (remove + union). Si no estaba en el
         // grupo (ej. dividido-sin-balance viejo), solo se agrega.
@@ -1149,6 +1153,7 @@ ${(()=>{
           via: otraPago ? "Balance" : form.via,
           tarjeta: otraPago ? null : (form.tarjeta||null),
           enBalance: !!form.sumar_balance,
+          creadoPor: authUser.uid,
         };
         fbDb.collection("groups").doc(groupId).update({
           gastosComp: firebase.firestore.FieldValue.arrayUnion(gastoComp)
@@ -1392,6 +1397,7 @@ ${(()=>{
         splitType: "monto", splitValue: miParte,
         via: g.via || "Efectivo", tarjeta: g.tarjeta || null,
         enBalance: false,
+        creadoPor: authUser.uid,
       };
       fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(gc)});
     });
@@ -1399,6 +1405,26 @@ ${(()=>{
     gastosCompSyncedRef.current = [...new Set([...gastosCompSyncedRef.current, ...ids])];
     setGastosCompSynced(s=>[...new Set([...s, ...ids])]);
     return faltantes.length;
+  };
+
+  /* ── NOVEDADES: actividad del partner dentro de la app ──
+     Fallback que no depende de permisos de push: lista lo que el otro
+     cargó (gastos del grupo y transferencias). El id numérico de las
+     entradas ES el timestamp de creación (Date.now()). */
+  const novedades = (() => {
+    if (!groupId || !groupData || !authUser) return [];
+    const myUid = authUser.uid;
+    const items = [
+      ...(groupData.gastosComp||[]).filter(g => (g.creadoPor || g.pagadoPor) !== myUid).map(g=>({...g, _tipo:"gasto"})),
+      ...(groupData.pagos||[]).filter(p => (p.creadoPor || p.de) !== myUid).map(p=>({...p, _tipo:"pago"})),
+    ].filter(x => typeof x.id === "number");
+    return items.sort((a,b)=>b.id-a.id).slice(0,15);
+  })();
+  const novedadesNuevas = novedades.filter(x=>x.id>novedadesSeen).length;
+  const cerrarNovedades = () => {
+    setNovedadesOpen(false);
+    const now = Date.now();
+    setNovedadesSeen(now); save("v1_novedades_seen", now);
   };
 
   const fiComp = (g) =>
@@ -2338,6 +2364,7 @@ ${(()=>{
       const nuevo = {
         id: Date.now(), fecha: fp.fecha,
         de: fp.de, a, monto: parseFloat(fp.monto), nota: fp.nota,
+        creadoPor: authUser?.uid || "",
       };
       fbDb.collection("groups").doc(groupId).update({
         pagos: firebase.firestore.FieldValue.arrayUnion(nuevo)
@@ -2553,6 +2580,17 @@ ${(()=>{
                 </span>
               </div>
               <div style={{display:"flex",gap:5}}>
+              {/* Campanita de novedades del grupo */}
+              {groupId && (
+                <button onClick={()=>setNovedadesOpen(true)} style={{position:"relative",background:novedadesNuevas>0?"rgba(232,69,10,0.35)":"rgba(255,255,255,0.1)",border:"none",borderRadius:7,padding:"6px 10px",cursor:"pointer",display:"flex",alignItems:"center"}}>
+                  <Icon name="bell" size={13} color="#fff"/>
+                  {novedadesNuevas>0 && (
+                    <span style={{position:"absolute",top:-5,right:-5,background:C.accent,color:"#fff",borderRadius:9,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:sans,fontSize:9,fontWeight:700,padding:"0 4px",border:`2px solid ${C.dark}`}}>
+                      {novedadesNuevas>9?"9+":novedadesNuevas}
+                    </span>
+                  )}
+                </button>
+              )}
               <button onClick={()=>setPrivado(v=>!v)} style={{background:privado?"rgba(255,255,255,0.22)":"rgba(255,255,255,0.1)",border:"none",borderRadius:7,padding:"6px 10px",cursor:"pointer",display:"flex",gap:5,alignItems:"center"}}>
                 <Icon name={privado?"eyeoff":"eye"} size={13} color="#fff"/>
                 <span style={{fontFamily:sans,fontSize:10,color:"#fff",fontWeight:600,letterSpacing:"0.06em"}}>{privado?"Mostrar":"Ocultar"}</span>
@@ -4011,6 +4049,55 @@ ${(()=>{
           </div>
         </div>
       )}
+
+      {/* ── PANEL DE NOVEDADES ── */}
+      {novedadesOpen && (()=>{
+        const partnerNov = (groupData?.members||[]).find(m=>m.uid!==authUser?.uid);
+        const nombreNov  = (partnerNov?.displayName||"Tu partner").split(" ")[0];
+        const catsCompNov = groupData?.catsComp?.length ? groupData.catsComp : CATS_COMP_DEFAULT;
+        return (
+          <div style={{position:"fixed",inset:0,zIndex:250,background:"rgba(0,0,0,0.55)",display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"60px 16px 20px"}} onClick={cerrarNovedades}>
+            <div style={{background:C.bg,borderRadius:14,width:"100%",maxWidth:430,maxHeight:"72vh",overflowY:"auto",padding:"16px 16px 10px"}} onClick={e=>e.stopPropagation()}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                <div style={{fontFamily:sans,fontSize:11,fontWeight:700,letterSpacing:"0.12em",textTransform:"uppercase",color:C.mid}}>
+                  Novedades de {nombreNov}
+                </div>
+                <button onClick={cerrarNovedades} style={{background:"none",border:"none",cursor:"pointer"}}>
+                  <Icon name="x" size={16} color={C.mid}/>
+                </button>
+              </div>
+              {novedades.length===0
+                ? <div style={{textAlign:"center",color:C.mid,padding:"24px 0",fontFamily:sans,fontSize:13}}>Sin actividad del otro miembro por ahora</div>
+                : novedades.map(item=>{
+                    const esNuevo = item.id > novedadesSeen;
+                    const fechaCorta = item.fecha ? `${item.fecha.slice(8,10)}/${item.fecha.slice(5,7)}` : "";
+                    const catLbl = item._tipo==="gasto" ? (catsCompNov.find(c=>c.id===item.catId)?.label || "Gasto") : null;
+                    return (
+                      <div key={`${item._tipo}_${item.id}`} style={{display:"flex",alignItems:"center",gap:10,padding:"9px 8px",borderRadius:8,background:esNuevo?"#F5F0FF":"transparent",borderBottom:`1px solid ${C.rule}`}}>
+                        <div style={{width:30,height:30,borderRadius:7,flexShrink:0,background:item._tipo==="pago"?"#D1FAE5":C.tagComp,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <Icon name={item._tipo==="pago"?"transfer":"users"} size={13} color={item._tipo==="pago"?C.green:C.comp}/>
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontFamily:sans,fontSize:12,fontWeight:600,color:C.ink,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+                            {item._tipo==="pago" ? "Transferencia" : (item.observacion||catLbl)}
+                            {esNuevo && <span style={{marginLeft:6,fontSize:8,fontWeight:700,color:C.accent,letterSpacing:"0.06em"}}>NUEVO</span>}
+                          </div>
+                          <div style={{fontFamily:sansR,fontSize:10,color:C.mid}}>
+                            {fechaCorta}{item._tipo==="gasto"&&catLbl&&!item.observacion?"":` · ${catLbl||""}`}
+                            {item._tipo==="gasto"&&item.enBalance===false?" · sin balance":""}
+                          </div>
+                        </div>
+                        <div style={{fontFamily:serif,fontSize:14,fontWeight:900,color:item._tipo==="pago"?C.green:C.comp,flexShrink:0}}>
+                          {fmt(item.monto||0)}
+                        </div>
+                      </div>
+                    );
+                  })
+              }
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── SETTINGS MINI MENU ── */}
       {modal==="settings" && (
