@@ -4078,6 +4078,13 @@ ${(()=>{
                       </div>
                   }
                   {pushStatus && <div style={{fontFamily:sansR,fontSize:11,color:C.red,marginTop:2}}>{pushStatus}</div>}
+                  {/* Línea de diagnóstico para debug remoto */}
+                  <div style={{fontFamily:sansR,fontSize:10,color:C.faint,marginTop:3}}>
+                    {((window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)||window.navigator.standalone) ? "App instalada" : "Navegador"}
+                    {" · soporte: "}{fbMessaging ? "sí" : "no"}
+                    {" · permiso: "}{(typeof Notification!=="undefined"&&Notification.permission)||"n/d"}
+                    {" · token: "}{groupData?.fcmTokens?.[authUser?.uid] ? "registrado" : "no registrado"}
+                  </div>
                 </div>
                 {PUSH_CONFIGURED && (
                   <button onClick={pushEnabled ? desactivarPush : activarPush}
