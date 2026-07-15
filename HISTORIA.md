@@ -287,6 +287,16 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Funcionalidad 7 — Campanita de novedades
+
+**Qué resuelve:** las notificaciones push tienen una limitación dura en iPhone: si el usuario les negó el permiso (o su iOS quedó trabado, como pasó en la práctica), no hay código capaz de destrabarlo — es una barrera de seguridad de Apple. Para que nadie dependa de eso, la app suma una vía propia que funciona **siempre**.
+
+**Cómo funciona:** una campanita en el encabezado (solo cuando hay grupo activo) muestra un contador rojo con la actividad nueva del otro miembro. Al tocarla, se abre un panel con los últimos movimientos que cargó la otra persona: gastos compartidos y transferencias, con monto, fecha, categoría y la marca "sin balance" cuando corresponde. Lo ya visto deja de contar en el globito.
+
+**Detalle técnico:** cada movimiento ahora registra quién lo cargó (además de quién lo pagó), y el "visto hasta" se guarda por dispositivo. No requiere ningún permiso del sistema.
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
