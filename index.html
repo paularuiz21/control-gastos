@@ -1015,7 +1015,19 @@ ${(()=>{
           ]}]
         })
       });
-      if (!resp.ok) throw new Error(`Error de API (${resp.status})`);
+      if (!resp.ok) {
+        // Traducir el error de la API a algo accionable en vez de solo el código
+        let apiMsg = "";
+        try { apiMsg = (await resp.json())?.error?.message || ""; } catch(e) {}
+        const guia =
+          resp.status===401 ? "Tu clave de API no es válida o fue revocada. Generá una nueva en console.anthropic.com y pegala en Configuración."
+          : resp.status===400 && /credit balance is too low/i.test(apiMsg)
+            ? "Tu cuenta de Anthropic no tiene saldo. Cargá crédito en console.anthropic.com → Billing."
+          : resp.status===429 ? "Demasiadas fotos seguidas. Esperá unos segundos y probá de nuevo."
+          : resp.status===529 || resp.status>=500 ? "El servicio de Anthropic está sobrecargado. Probá de nuevo en un rato."
+          : apiMsg || `Error ${resp.status}`;
+        throw new Error(guia);
+      }
       const data = await resp.json();
       const text = data.content[0].text.trim();
       const jsonMatch = text.match(/\{[\s\S]*\}/);
