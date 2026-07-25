@@ -983,6 +983,14 @@ function App() {
 Tarjetas disponibles: ${tarjetasNames}
 Si no podés determinar un campo usá null.
 
+Reglas para leer la fecha (el campo que más se equivoca):
+- Los comprobantes argentinos usan DÍA/MES/AÑO. "05/07/2026" es el 5 de JULIO, no el 7 de mayo.
+  Si el primer número es mayor que 12, es sí o sí el día (ej: "19/06" = 19 de junio).
+- Si hay varias fechas, usá la de la COMPRA o el PAGO. Ignorá vencimientos, fecha de emisión
+  del resumen, fecha de impresión y períodos facturados (ej: "07-2026" en un ABL es el período,
+  no la fecha de pago).
+- Si no se ve el año, usá ${new Date().getFullYear()}. Hoy es ${today()}: la fecha no puede ser futura.
+
 Reglas específicas de categorización:
 - PedidosYa, Rappi o cualquier app de delivery de supermercado → categoría Supermercado
 - Smiles, compra de millas, programas de fidelidad de aerolíneas → categoría Viajes
@@ -1034,6 +1042,19 @@ ${(()=>{
       if (!jsonMatch) throw new Error("No se pudo interpretar el comprobante");
       const r = JSON.parse(jsonMatch[0]);
 
+      // Red de seguridad para la fecha: una compra no puede ser futura ni tener
+      // formato inválido. Si el modelo se equivoca, no pisamos la fecha del form
+      // (que ya viene con hoy) — es mejor la de hoy que una fecha imposible.
+      const fechaOK = (() => {
+        const f = r.fecha;
+        if (typeof f !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(f)) return null;
+        const d = new Date(f + "T12:00:00");
+        if (isNaN(d.getTime())) return null;
+        if (f > today()) return null;                       // futura: descartar
+        if (Number(f.slice(0,4)) < 2000) return null;       // año absurdo
+        return f;
+      })();
+
       const tipoMov = ["Gasto","Ingreso","Ahorro"].includes(r.tipo_mov) ? r.tipo_mov : "Gasto";
       const listaCats = tipoMov==="Ingreso" ? catsIngreso : tipoMov==="Ahorro" ? catsAhorro : catsSorted;
       const cat = listaCats.find(c => r.categoria && c.label.toLowerCase()===r.categoria.toLowerCase());
@@ -1043,7 +1064,7 @@ ${(()=>{
 
       setForm(f => ({
         ...f,
-        fecha:       r.fecha     || f.fecha,
+        fecha:       fechaOK     || f.fecha,
         monto:       r.monto     != null ? String(r.monto) : f.monto,
         moneda:      r.moneda    || f.moneda,
         tipo_mov:    tipoMov,
