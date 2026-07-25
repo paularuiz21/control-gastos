@@ -3837,7 +3837,18 @@ ${(()=>{
           const catsComp    = groupData?.catsComp?.length?groupData.catsComp:CATS_COMP_DEFAULT;
           const balance     = calcBalance(gastosComp, pagos, myUid);
           const inviteUrl   = `https://paularuiz21.github.io/control-gastos/?invite=${groupData?.inviteToken||""}`;
-          const getCatComp  = (id) => catsComp.find(c=>c.id===id)||{label:id||"Gasto",icon:"star"};
+          // catId puede venir de dos formatos: prefijo "comp_..." (creado desde el
+          // modal dedicado de compartidos) o el id de categoría PERSONAL sin prefijo
+          // (creado desde Registrar con "Dividir en 2" — el camino que se usa siempre
+          // en la práctica). Buscar en ambas listas para no caer siempre en la estrella.
+          const getCatComp  = (id) => {
+            const directo = catsComp.find(c=>c.id===id);
+            if (directo) return directo;
+            const baseId   = (id||"").replace(/^comp_/,"");
+            const personal = cats.find(c=>c.id===baseId) || cats.find(c=>c.id===id);
+            if (personal) return {label: personal.label, icon: personal.icon};
+            return {label:id||"Gasto", icon:"star"};
+          };
           const hoyStr      = today();
           // Mes de impacto del item (los pagos/transferencias no tienen impacto: usan su fecha)
           const ymImpacto   = item => item.tipo==="pago" ? (item.fecha||"").slice(0,7) : fiComp(item).slice(0,7);
