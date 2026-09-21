@@ -619,6 +619,7 @@ function App() {
   const prevGCFingerprintRef = React.useRef("");
   const prevGCIdsRef         = React.useRef(new Set()); // IDs vistos en el último snapshot válido
   const prevGCEntriesRef     = React.useRef(new Map()); // id → entrada gastosComp del último snapshot (para papelera)
+  const gcReplacingRef       = React.useRef(new Set()); // ids en medio de un reemplazo arrayRemove+arrayUnion (ver auto-sync)
   useEffect(() => { gastosCompSyncedRef.current = gastosCompSynced; }, [gastosCompSynced]);
   const [undoData,   setUndoData]   = useState(null); // {gasto, gcEntry?, gcId?}
   const undoTimerRef = React.useRef(null);
@@ -781,8 +782,15 @@ function App() {
     //   b) apareció en un snapshot anterior (prevGCIdsRef) Y
     //   c) ya no está en el snapshot actual
     // Esto evita borrados falsos cuando Firestore devuelve temporalmente gastosComp vacío
+    //   d) NO está en medio de un reemplazo (editar = arrayRemove + arrayUnion, dos
+    //      escrituras). Con persistencia offline el snapshot local intermedio llega
+    //      SIN la entrada y acá se la tomaba como borrada por el partner: el gasto
+    //      propio iba a la papelera y el snapshot siguiente lo re-creaba como gc_
+    //      con monto_dividir:null → "se olvidaba que era compartido" y quedaba solo
+    //      mi parte. gcReplacingRef marca esos ids hasta que la entrada reaparece.
+    gcReplacingRef.current.forEach(id => { if (currentGCIds.has(id)) gcReplacingRef.current.delete(id); });
     const deletedIds = new Set(
-      currentSynced.filter(id => prevGCIdsRef.current.has(id) && !currentGCIds.has(id))
+      currentSynced.filter(id => prevGCIdsRef.current.has(id) && !currentGCIds.has(id) && !gcReplacingRef.current.has(id))
     );
     // Capturar las entradas del snapshot ANTERIOR antes de pisarlas: son las que
     // necesita la papelera para poder restaurar al Balance una entrada borrada.
@@ -1144,8 +1152,13 @@ ${(()=>{
         };
         // Reemplazo atómico por elemento (remove + union). Si no estaba en el
         // grupo (ej. dividido-sin-balance viejo), solo se agrega.
+        // Marcar el id como "en reemplazo" ANTES de escribir: el auto-sync ignora
+        // su ausencia en el snapshot intermedio (si no, borraba el gasto propio y
+        // lo re-creaba como gc_ sin monto_dividir). Se limpia solo al reaparecer.
+        gcReplacingRef.current.add(numId);
         if (gcEntry) fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(gcEntry)});
-        fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(updatedGC)});
+        fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(updatedGC)})
+          .catch(e => { gcReplacingRef.current.delete(numId); console.warn("[edit] arrayUnion falló:", e); });
         if (!gcEntry) {
           gastosCompSyncedRef.current = [...new Set([...gastosCompSyncedRef.current, numId])];
           setGastosCompSynced(s=>[...new Set([...s, numId])]);
@@ -1217,14 +1230,21 @@ ${(()=>{
     setEditando(g.id);
     const tarjetaId = tarjetas.find(t=>t.id===g.tarjeta||t.label===g.via)?.id||"";
     // Intentar recuperar tipo de división y quién pagó desde la entrada gastosComp
-    let divTipo = "mitad", divValor = "", quienPago = "yo";
+    let divTipo = "mitad", divValor = "", quienPago = "yo", sumarBalance = false;
     if (groupData && g.monto_dividir) {
       const numId = gcEntryId(g.id);
       const gcEntry = (groupData.gastosComp||[]).find(x=>x.id===numId);
       if (gcEntry) {
         divTipo  = gcEntry.splitType || "mitad";
-        divValor = divTipo !== "mitad" ? String(gcEntry.splitValue||"") : "";
         quienPago = gcEntry.pagadoPor === authUser?.uid ? "yo" : "otra";
+        // "$ fijo": splitValue guarda la parte del que PAGÓ (montoMio). Si pagó el
+        // otro, eso es SU parte, no la mía → usar mi parte real (en la moneda del form).
+        if (divTipo === "monto")    divValor = String(g.monto_original != null ? g.monto_original : g.monto);
+        else if (divTipo === "pct") divValor = String(gcEntry.splitValue||"");
+        // Sin campo enBalance (entradas viejas) = contaba en el balance. Antes no se
+        // restauraba: al guardar quedaba enBalance:false y pagadoPor = yo aunque
+        // lo hubiera pagado el otro.
+        sumarBalance = gcEntry.enBalance !== false;
       }
     }
     setForm({
@@ -1241,6 +1261,7 @@ ${(()=>{
       divTipo,
       divValor,
       quienPago,
+      sumar_balance: sumarBalance,
       moneda:       g.moneda||"ARS",
       tcambio:      g.tcambio ? String(g.tcambio) : "",
     });
@@ -2179,6 +2200,7 @@ ${(()=>{
         // Remove + union por elemento: no pisa cambios simultáneos del partner.
         // Se busca la entrada original exacta (editItem puede ser una copia).
         const orig = (groupData.gastosComp||[]).find(g=>g.id===editItem.id);
+        gcReplacingRef.current.add(entryId); // el auto-sync ignora la ausencia intermedia (ver guardar)
         if (orig) fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayRemove(orig)});
         fbDb.collection("groups").doc(groupId).update({gastosComp: firebase.firestore.FieldValue.arrayUnion(nuevo)});
       } else {
