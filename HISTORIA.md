@@ -307,6 +307,14 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Mejora — El botón "atrás" ya no saca de la app
+
+**Qué pasaba:** en Android (botón o gesto de atrás) y en el navegador, "atrás" cerraba la app desde cualquier lugar: una solapa, Configuración, una sub-pantalla o una edición a medias. La app es una sola página y nunca le decía al navegador que "adentro" había distintos lugares.
+
+**Cómo se resolvió:** ahora "atrás" se comporta como en una app nativa: cierra lo que esté abierto, de arriba hacia abajo. Una sub-pantalla de Configuración vuelve a Configuración; Configuración se cierra; una edición se cancela y vuelve a la solapa desde la que se abrió; cualquier otra solapa vuelve a Registrar. Solo cuando ya estás en Registrar sin nada abierto, el siguiente "atrás" sale de la app.
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
