@@ -642,6 +642,38 @@ function App() {
   };
   const [form, setForm] = useState(FORM_INIT);
 
+  /* ── BOTÓN ATRÁS (Android / gesto del navegador) ──
+     La app es una sola página sin router: sin esto, "atrás" salía de la app
+     desde cualquier solapa o modal. Mecanismo: mientras haya algo abierto o no
+     estemos en Registrar, se mantiene una entrada "guardia" en el historial.
+     Al volver (popstate) se cierra lo de más arriba (modal → Configuración →
+     edición → solapa inicial); el effect vuelve a armar la guardia si sigue
+     habiendo algo que cerrar. En Registrar sin nada abierto no hay guardia:
+     el siguiente "atrás" sale de la app, como corresponde. */
+  const navRef        = React.useRef({});
+  const editFromTabRef = React.useRef("lista"); // solapa desde la que se abrió una edición
+  navRef.current = {modal, novedadesOpen, reporteImg, showJoinPrompt, tab, editando, formInit:FORM_INIT};
+  const navEnCasa = !modal && !novedadesOpen && !reporteImg && !showJoinPrompt && !editando && tab==="cargar";
+  useEffect(() => {
+    // Deps = cada pieza de navegación (no navEnCasa): al cerrar un nivel con
+    // "atrás" y quedar en otro (ej. sub-pantalla → Configuración) hay que re-armar.
+    if (!navEnCasa && !window.history.state?.cfGuard) window.history.pushState({cfGuard:true}, "");
+  }, [modal, novedadesOpen, reporteImg, showJoinPrompt, tab, editando]);
+  useEffect(() => {
+    const onPop = () => {
+      const s = navRef.current;
+      if      (s.reporteImg)     setReporteImg(null);
+      else if (s.novedadesOpen)  setNovedadesOpen(false);
+      else if (s.showJoinPrompt) { setShowJoinPrompt(false); window.history.replaceState(window.history.state, "", window.location.pathname); }
+      else if (s.modal && s.modal!=="settings") setModal("settings"); // sub-pantallas de Configuración vuelven a Configuración
+      else if (s.modal)          setModal(null);
+      else if (s.editando)       { setEditando(null); setForm(s.formInit); setTab(editFromTabRef.current); }
+      else if (s.tab!=="cargar") setTab("cargar");
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   useEffect(() => { save("v6_gastos",       gastos);            }, [gastos]);
   useEffect(() => { save("v1_gastos_eliminados", gastosEliminados); }, [gastosEliminados]);
   useEffect(() => { save("v8_cats",         cats);        }, [cats]);
@@ -1227,6 +1259,7 @@ ${(()=>{
   };
 
   const editarGasto = (g) => {
+    editFromTabRef.current = tab; // "atrás" durante la edición cancela y vuelve acá
     setEditando(g.id);
     const tarjetaId = tarjetas.find(t=>t.id===g.tarjeta||t.label===g.via)?.id||"";
     // Intentar recuperar tipo de división y quién pagó desde la entrada gastosComp
@@ -4467,7 +4500,7 @@ ${(()=>{
                 if (r && r!=="notfound" && r!=="full") {
                   setGroupId(r.groupId); setGroupData(r);
                   fsSave(authUser.uid, {gastos,cats,catsIngreso,catsAhorro,tarjetas,presup,presupComp,objAhorro,groupId:r.groupId});
-                  window.history.replaceState({}, '', window.location.pathname);
+                  window.history.replaceState(window.history.state, '', window.location.pathname); // conservar la guardia del botón atrás
                 }
                 setPendingInvite(null); setShowJoinPrompt(false);
               }} style={{flex:1,padding:"12px",borderRadius:10,border:"none",background:C.blue,color:"#fff",fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
@@ -4475,7 +4508,7 @@ ${(()=>{
               </button>
               <button onClick={()=>{
                 setShowJoinPrompt(false);
-                window.history.replaceState({}, '', window.location.pathname);
+                window.history.replaceState(window.history.state, '', window.location.pathname); // conservar la guardia del botón atrás
               }} style={{flex:1,padding:"12px",borderRadius:10,border:`1px solid ${C.rule}`,background:C.paper,color:C.mid,fontFamily:sans,fontWeight:700,fontSize:13,cursor:"pointer"}}>
                 Cancelar
               </button>
