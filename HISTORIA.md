@@ -297,6 +297,16 @@ La funcionalidad de foto (que ya existía para gastos personales) se extendió t
 
 ---
 
+### Corrección — Editar un gasto compartido lo dejaba "a la mitad"
+
+**Qué pasaba:** a veces, al editar un gasto compartido, el gasto quedaba con solo la parte propia, sin la marca de compartido ni el total del comprobante — como si la app se olvidara de que estaba dividido. Además aparecía una copia en la papelera sin que nadie lo hubiera borrado.
+
+**Por qué (y por qué "volvió"):** era un efecto colateral de la mejora de ediciones simultáneas. Editar se hace en dos pasos en la nube: sacar la entrada vieja y agregar la nueva. Entre esos dos pasos, la app recibe una foto intermedia del grupo **sin la entrada**, y el sincronizador la interpretaba como "la otra persona lo borró": mandaba el gasto propio a la papelera y, un instante después, al ver la entrada nueva, lo recreaba como si fuera un gasto del partner (solo mi parte, sin total). Era intermitente porque a veces los dos pasos llegaban juntos y no pasaba nada. Un arreglo anterior de junio (duplicados) no lo cubría: aquel protege cuando el gasto propio todavía existe, y acá ya había sido borrado.
+
+**Cómo se resolvió:** antes de editar, la app marca ese gasto como "en reemplazo"; el sincronizador ignora su ausencia momentánea y quita la marca cuando la entrada reaparece. Se verificó con una simulación del sincronizador real: sin la marca reproduce el bug exacto, con la marca el gasto queda intacto. De paso se corrigieron dos cosas más al abrir un gasto compartido para editar: la casilla "Sumar al balance" no se restauraba (al guardar, el gasto salía del balance y pasaba a figurar como pagado por uno aunque lo hubiera pagado el otro), y con división "$ fijo" el campo "Mi parte" mostraba la parte del otro cuando el otro había pagado.
+
+---
+
 ## Análisis de robustez — temas identificados a futuro
 
 De una revisión general del código (julio 2026) quedaron identificados:
@@ -321,4 +331,4 @@ De una revisión general del código (julio 2026) quedaron identificados:
 
 ---
 
-*Documento actualizado: julio 2026*
+*Documento actualizado: septiembre 2026*
